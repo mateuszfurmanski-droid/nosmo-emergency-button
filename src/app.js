@@ -1,271 +1,144 @@
-import {
-  Answer,
-  Guidance,
-  IncidentState,
-  createIncident,
-  getGuidanceCopy,
-  getQuestionCopy,
-  getResponderSummary,
-  reduceIncident,
-} from "./emergency-state.js";
+import { AgeGroup, Answer, IncidentState, Scenario, createIncident, getQuestionCopy, getScenarioCopy, reduceIncident } from './emergency-state.js';
 
 const refs = {
-  startScreen: document.querySelector("#startScreen"),
-  emergencyScreen: document.querySelector("#emergencyScreen"),
-  activateButton: document.querySelector("#activateButton"),
-  elapsedTime: document.querySelector("#elapsedTime"),
-  voiceToggle: document.querySelector("#voiceToggle"),
-  teamStatus: document.querySelector("#teamStatus"),
-  teamStatusValue: document.querySelector("#teamStatusValue"),
-  teamStatusDetail: document.querySelector("#teamStatusDetail"),
-  locationStatusValue: document.querySelector("#locationStatusValue"),
-  locationStatusDetail: document.querySelector("#locationStatusDetail"),
-  microphoneStatusValue: document.querySelector("#microphoneStatusValue"),
-  microphoneStatusDetail: document.querySelector("#microphoneStatusDetail"),
-  micMeterFill: document.querySelector("#micMeterFill"),
-  decisionPanel: document.querySelector("#decisionPanel"),
-  cancelButton: document.querySelector("#cancelButton"),
-  responderDialog: document.querySelector("#responderDialog"),
-  responderList: document.querySelector("#responderList"),
-  acknowledgeDemo: document.querySelector("#acknowledgeDemo"),
-  unavailableDemo: document.querySelector("#unavailableDemo"),
-  joinAudioDemo: document.querySelector("#joinAudioDemo"),
-  closeResponderDialog: document.querySelector("#closeResponderDialog"),
-  toast: document.querySelector("#toast"),
+  startScreen: document.querySelector('#startScreen'), emergencyScreen: document.querySelector('#emergencyScreen'),
+  activateButton: document.querySelector('#activateButton'), elapsedTime: document.querySelector('#elapsedTime'),
+  voiceToggle: document.querySelector('#voiceToggle'), callStatus: document.querySelector('#callStatus'),
+  locationStatus: document.querySelector('#locationStatus'), locationStatusValue: document.querySelector('#locationStatusValue'),
+  locationStatusDetail: document.querySelector('#locationStatusDetail'), decisionPanel: document.querySelector('#decisionPanel'),
+  cancelButton: document.querySelector('#cancelButton'), callDialog: document.querySelector('#callDialog'),
+  closeCallDialog: document.querySelector('#closeCallDialog'), toast: document.querySelector('#toast'),
 };
 
 let incident = null;
 let voiceEnabled = true;
 let lastSpokenKey = null;
 let elapsedTimer = null;
-let responderTimers = [];
 let toastTimer = null;
-let mediaStream = null;
-let audioContext = null;
-let analyser = null;
-let levelFrame = null;
+let rhythmTimer = null;
+let rhythmAudio = null;
+let rhythmActive = false;
 let wakeLock = null;
-let recognition = null;
-let recognitionActive = false;
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+function now(){ return new Date().toISOString(); }
+function dispatch(action){ if(!incident)return; incident=reduceIncident(incident,action,now()); render(); }
 
-function now() { return new Date().toISOString(); }
-
-function dispatch(action) {
-  if (!incident) return;
-  incident = reduceIncident(incident, action, now());
-  render();
+function activateEmergency(){
+  if(incident)return;
+  incident=createIncident(now());
+  refs.startScreen.hidden=true; refs.emergencyScreen.hidden=false; document.body.classList.add('emergency-active');
+  startElapsedTimer(); requestFullscreen(); requestWakeLock(); render();
 }
 
-function activateDemo() {
-  if (incident) return;
-  incident = createIncident(now());
-  refs.startScreen.hidden = true;
-  refs.emergencyScreen.hidden = false;
-  document.body.classList.add("emergency-active");
-  render();
-  dispatch({ type: "BEGIN_ASSESSMENT" });
-  startElapsedTimer();
-  startResponderSimulation();
-  requestDeviceFullscreen();
-  requestWakeLock();
-  requestLocation();
-  requestLocalMicrophone();
+async function requestFullscreen(){ try{ if(!document.fullscreenElement&&document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'}); }catch{} }
+async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch{ wakeLock=null; } }
+function startElapsedTimer(){ updateElapsed(); elapsedTimer=window.setInterval(updateElapsed,1000); }
+function updateElapsed(){ if(!incident)return; const seconds=Math.max(0,Math.floor((Date.now()-Date.parse(incident.activatedAt))/1000)); refs.elapsedTime.textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`; refs.elapsedTime.dateTime=`PT${seconds}S`; }
+
+function render(){
+  if(!incident)return;
+  renderLocationStatus();
+  if(incident.state!==IncidentState.GUIDANCE && rhythmActive) stopRhythm(false);
+  if(incident.state===IncidentState.ASSESSING) renderQuestion();
+  else if(incident.state===IncidentState.SCENARIO_PICKER) renderScenarioPicker();
+  else if(incident.state===IncidentState.AGE_SELECT) renderAgePicker();
+  else if(incident.state===IncidentState.GUIDANCE) renderGuidance();
+  else if(incident.state===IncidentState.CANCELLED) renderCancelled();
 }
 
-async function requestDeviceFullscreen() {
-  try {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({ navigationUI: "hide" });
-  } catch { showToast("FULLSCREEN API UNAVAILABLE • VIEWPORT MODE IS STILL ACTIVE"); }
+function renderQuestion(){
+  const q=getQuestionCopy(incident.currentQuestion); if(!q)return;
+  refs.decisionPanel.innerHTML=`<div class="question-view"><div class="instruction-copy"><p class="eyebrow">${q.eyebrow}</p><h2>${q.title}</h2><p>${q.detail}</p></div><div class="answer-grid" aria-label="Answer choices"><button class="answer-button answer-yes" data-answer="YES">YES</button><button class="answer-button answer-no" data-answer="NO">NO</button><button class="answer-button answer-unknown" data-answer="UNKNOWN">NOT SURE</button><button class="answer-button answer-voice" data-call-help>999 / 112<span>OPEN DIALLER</span></button></div></div>`;
+  refs.decisionPanel.querySelectorAll('[data-answer]').forEach((b)=>b.addEventListener('click',()=>dispatch({type:'ANSWER',answer:Answer[b.dataset.answer]})));
+  refs.decisionPanel.querySelector('[data-call-help]')?.addEventListener('click',openCallDialog);
+  speakOnce(`q:${incident.currentQuestion}`,`${q.title}. ${q.detail}`);
 }
 
-async function requestWakeLock() {
-  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch { wakeLock = null; }
+const scenarioChoices=[
+  [Scenario.CPR,'CPR','NOT BREATHING','danger'],[Scenario.CHOKING,'CHOKING','AIRWAY BLOCKED','airway'],
+  [Scenario.STROKE,'STROKE','FAST','stroke'],[Scenario.ANAPHYLAXIS,'ANAPHYLAXIS','SEVERE ALLERGY','allergy'],
+  [Scenario.SEVERE_BLEEDING,'SEVERE BLEEDING','PRESS HARD','bleeding'],[Scenario.OPERATOR,'NOT SURE','CALL OPERATOR','operator'],
+];
+function renderScenarioPicker(){
+  const buttons=scenarioChoices.map(([id,title,small,cls])=>`<button class="scenario-choice ${cls}" data-scenario="${id}">${title}<small>${small}</small></button>`).join('');
+  refs.decisionPanel.innerHTML=`<div class="scenario-picker"><div class="scenario-copy"><p class="eyebrow">QUICK EMERGENCY ROUTING</p><h2>WHAT IS HAPPENING?</h2><p>Choose the closest match. If unsure, use NOT SURE and call 999 / 112.</p></div><div class="scenario-choice-grid">${buttons}</div></div>`;
+  refs.decisionPanel.querySelectorAll('[data-scenario]').forEach((b)=>b.addEventListener('click',()=>dispatch({type:'SELECT_SCENARIO',scenario:b.dataset.scenario})));
+  speakOnce('scenario-picker','What is happening? Choose CPR, choking, stroke, anaphylaxis, severe bleeding, or not sure.');
 }
 
-function requestLocation() {
-  if (!("geolocation" in navigator)) { dispatch({ type: "LOCATION_FAILED", status: "UNAVAILABLE" }); return; }
-  navigator.geolocation.getCurrentPosition(
-    (position) => dispatch({ type: "LOCATION_AVAILABLE", latitude: position.coords.latitude, longitude: position.coords.longitude, accuracyMetres: position.coords.accuracy }),
-    (error) => dispatch({ type: "LOCATION_FAILED", status: error.code === error.PERMISSION_DENIED ? "DENIED" : "UNAVAILABLE" }),
-    { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 },
-  );
+function renderAgePicker(){
+  const isCpr=incident.scenario===Scenario.CPR;
+  refs.decisionPanel.innerHTML=`<div class="age-picker"><div class="age-copy"><p class="eyebrow">${isCpr?'CPR':'CHOKING'} — AGE</p><h2>WHO NEEDS HELP?</h2><p>Choose the age group so the physical technique is correct.</p></div><div class="age-choice-grid"><button class="age-choice adult" data-age="adult">ADULT<small>ADULT / ADOLESCENT</small></button><button class="age-choice child" data-age="child">CHILD<small>1–18 YEARS</small></button><button class="age-choice infant" data-age="infant">BABY<small>UNDER 1 YEAR</small></button><button class="age-choice back" data-back-scenarios>BACK<small>CHOOSE ANOTHER EMERGENCY</small></button></div></div>`;
+  refs.decisionPanel.querySelectorAll('[data-age]').forEach((b)=>b.addEventListener('click',()=>dispatch({type:'SELECT_AGE',ageGroup:b.dataset.age})));
+  refs.decisionPanel.querySelector('[data-back-scenarios]')?.addEventListener('click',()=>dispatch({type:'BACK_TO_SCENARIOS'}));
+  speakOnce(`age:${incident.scenario}`,'Choose adult, child, or baby.');
 }
 
-async function requestLocalMicrophone() {
-  if (!navigator.mediaDevices?.getUserMedia) { dispatch({ type: "MICROPHONE_FAILED", status: "UNAVAILABLE" }); return; }
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true }, video: false });
-    dispatch({ type: "MICROPHONE_ACTIVE" });
-    startLocalLevelMeter(mediaStream);
-  } catch (error) {
-    dispatch({ type: "MICROPHONE_FAILED", status: error?.name === "NotAllowedError" ? "DENIED" : "UNAVAILABLE" });
-  }
+function renderGuidance(){
+  const g=getScenarioCopy(incident.scenario,incident.ageGroup); if(!g){ dispatch({type:'BACK_TO_SCENARIOS'}); return; }
+  const steps=g.steps.map((step,i)=>`<div class="guidance-step"><span class="guidance-number">${i+1}</span><p>${step}</p></div>`).join('');
+  const rhythm=g.rhythm?`<div class="cpr-rhythm"><div id="rhythmOrb" class="rhythm-orb">110</div><button class="rhythm-control" data-rhythm>${rhythmActive?'STOP CPR RHYTHM':'START CPR RHYTHM'}<span>110 COMPRESSIONS / MIN</span></button></div>`:'';
+  refs.decisionPanel.innerHTML=`<div class="guidance-view"><div class="guidance-copy ${g.tone}"><p class="eyebrow">${g.eyebrow}</p><h2>${g.title}</h2><div class="guidance-steps">${steps}</div>${rhythm}</div><div class="guidance-actions"><button class="call-action primary-call compact" data-call="999">CALL 999<span>OPENS DIALLER</span></button><button class="call-action compact" data-call="112">CALL 112<span>OPENS DIALLER</span></button><button class="next-action compact" data-back-scenarios>OTHER EMERGENCY<span>BACK TO QUICK ROUTING</span></button><button class="next-action compact" data-repeat>READ AGAIN<span>VOICE GUIDANCE</span></button></div></div>`;
+  refs.decisionPanel.querySelectorAll('[data-call]').forEach((b)=>b.addEventListener('click',()=>openDialler(b.dataset.call)));
+  refs.decisionPanel.querySelector('[data-back-scenarios]')?.addEventListener('click',()=>dispatch({type:'BACK_TO_SCENARIOS'}));
+  refs.decisionPanel.querySelector('[data-repeat]')?.addEventListener('click',()=>speakGuidance(g));
+  refs.decisionPanel.querySelector('[data-rhythm]')?.addEventListener('click',toggleRhythm);
+  speakOnce(`guidance:${incident.scenario}:${incident.ageGroup||'na'}`,`${g.title}. ${g.steps.join('. ')}`);
 }
 
-function startLocalLevelMeter(stream) {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    audioContext = new AudioContext();
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    audioContext.createMediaStreamSource(stream).connect(analyser);
-    const samples = new Uint8Array(analyser.fftSize);
-    const update = () => {
-      if (!analyser || !mediaStream) return;
-      analyser.getByteTimeDomainData(samples);
-      let sum = 0;
-      for (const sample of samples) { const normal = (sample - 128) / 128; sum += normal * normal; }
-      const level = Math.min(100, Math.round(Math.sqrt(sum / samples.length) * 260));
-      refs.micMeterFill.style.width = `${Math.max(3, level)}%`;
-      levelFrame = window.requestAnimationFrame(update);
-    };
-    update();
-  } catch { refs.micMeterFill.style.width = "12%"; }
+function renderCancelled(){
+  refs.cancelButton.hidden=true;
+  refs.decisionPanel.innerHTML=`<div class="cancelled-view"><p class="eyebrow danger-text">EMERGENCY MODE EXITED</p><h2>LOCAL SESSION ENDED</h2><p>No call or responder notification is claimed by this app. If help is still needed, call 999 or 112.</p><button class="reset-action" data-reset>RESET</button></div>`;
+  refs.decisionPanel.querySelector('[data-reset]')?.addEventListener('click',resetEmergency);
 }
 
-function startResponderSimulation() {
-  const schedule = [
-    [550, "demo-first-aider-1", "DELIVERED", null],
-    [1000, "demo-first-aider-1", "ACKNOWLEDGED", null],
-    [1500, "demo-supervisor-1", "ACKNOWLEDGED", null],
-    [2100, "demo-first-aider-1", "EN_ROUTE", 2],
-    [2700, "demo-gate-1", "ACKNOWLEDGED", null],
-    [3300, "demo-supervisor-1", "EN_ROUTE", 3],
-  ];
-  responderTimers = schedule.map(([delay, id, state, etaMinutes]) => window.setTimeout(() => dispatch({ type: "RESPONDER_UPDATE", id, state, etaMinutes }), delay));
+function openCallDialog(){ if(typeof refs.callDialog.showModal==='function')refs.callDialog.showModal(); else refs.callDialog.setAttribute('open',''); }
+function closeCallDialog(){ if(typeof refs.callDialog.close==='function')refs.callDialog.close(); else refs.callDialog.removeAttribute('open'); }
+function openDialler(number){ if(incident) incident=reduceIncident(incident,{type:'CALL_DIALER_OPENED',number},now()); showToast(`OPENING ${number} DIALLER • CONNECTION NOT CONFIRMED`); window.location.href=`tel:${number}`; }
+
+function requestLocation(){
+  if(!incident)return;
+  incident=reduceIncident(incident,{type:'LOCATION_REQUESTING'},now()); renderLocationStatus();
+  if(!navigator.geolocation){ incident=reduceIncident(incident,{type:'LOCATION_FAILED',status:'UNAVAILABLE'},now()); return renderLocationStatus(); }
+  navigator.geolocation.getCurrentPosition((p)=>{incident=reduceIncident(incident,{type:'LOCATION_AVAILABLE',latitude:p.coords.latitude,longitude:p.coords.longitude,accuracyMetres:p.coords.accuracy},now());renderLocationStatus();},(e)=>{incident=reduceIncident(incident,{type:'LOCATION_FAILED',status:e.code===e.PERMISSION_DENIED?'DENIED':'UNAVAILABLE'},now());renderLocationStatus();},{enableHighAccuracy:true,timeout:8000,maximumAge:15000});
+}
+function renderLocationStatus(){
+  if(!incident)return;
+  const l=incident.location;
+  refs.locationStatusValue.classList.toggle('location-available',l.status==='AVAILABLE');
+  if(l.status==='AVAILABLE'){ refs.locationStatusValue.textContent=`GPS ±${Math.round(l.accuracyMetres)}M`; refs.locationStatusDetail.textContent=`${l.latitude.toFixed(5)}, ${l.longitude.toFixed(5)} • DEVICE ONLY`; }
+  else if(l.status==='REQUESTING'){ refs.locationStatusValue.textContent='REQUESTING'; refs.locationStatusDetail.textContent='DEVICE PERMISSION'; }
+  else if(l.status==='DENIED'){ refs.locationStatusValue.textContent='GPS DENIED'; refs.locationStatusDetail.textContent='TAP TO RETRY'; }
+  else if(l.status==='UNAVAILABLE'){ refs.locationStatusValue.textContent='GPS UNAVAILABLE'; refs.locationStatusDetail.textContent='TAP TO RETRY'; }
+  else { refs.locationStatusValue.textContent='TAP TO GET'; refs.locationStatusDetail.textContent='DEVICE ONLY'; }
 }
 
-function startElapsedTimer() { updateElapsed(); elapsedTimer = window.setInterval(updateElapsed, 1000); }
-function updateElapsed() {
-  if (!incident) return;
-  const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(incident.activatedAt)) / 1000));
-  const minutes = Math.floor(seconds / 60); const remainder = seconds % 60;
-  refs.elapsedTime.textContent = `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
-  refs.elapsedTime.dateTime = `PT${seconds}S`;
+function toggleVoice(){ voiceEnabled=!voiceEnabled; refs.voiceToggle.textContent=voiceEnabled?'VOICE ON':'VOICE OFF'; refs.voiceToggle.setAttribute('aria-pressed',String(voiceEnabled)); if(!voiceEnabled&&'speechSynthesis'in window)window.speechSynthesis.cancel(); if(voiceEnabled){lastSpokenKey=null;render();} }
+function speakOnce(key,words){ if(!voiceEnabled||lastSpokenKey===key)return; lastSpokenKey=key; speak(words); }
+function speakGuidance(g){ speak(`${g.title}. ${g.steps.join('. ')}`); }
+function speak(words){ if(!voiceEnabled||!('speechSynthesis'in window))return; window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(words);u.lang='en-GB';u.rate=.92;window.speechSynthesis.speak(u); }
+
+function toggleRhythm(){ rhythmActive?stopRhythm(true):startRhythm(); }
+function startRhythm(){
+  rhythmActive=true; let beatCount=0; const interval=Math.round(60000/110);
+  const beat=()=>{ const orb=document.querySelector('#rhythmOrb'); if(orb){orb.classList.add('beat');setTimeout(()=>orb.classList.remove('beat'),100);} beep(); beatCount++; if(navigator.vibrate&&beatCount%2===0)navigator.vibrate(30); };
+  beat(); rhythmTimer=window.setInterval(beat,interval); renderGuidance();
 }
+function stopRhythm(rerender){ if(rhythmTimer)clearInterval(rhythmTimer);rhythmTimer=null;rhythmActive=false;if(rhythmAudio){rhythmAudio.close().catch(()=>{});rhythmAudio=null;}if(navigator.vibrate)navigator.vibrate(0);if(rerender&&incident?.state===IncidentState.GUIDANCE)renderGuidance(); }
+function beep(){ try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;if(!rhythmAudio)rhythmAudio=new C();const o=rhythmAudio.createOscillator(),g=rhythmAudio.createGain();o.frequency.value=740;g.gain.setValueAtTime(.12,rhythmAudio.currentTime);g.gain.exponentialRampToValueAtTime(.001,rhythmAudio.currentTime+.07);o.connect(g).connect(rhythmAudio.destination);o.start();o.stop(rhythmAudio.currentTime+.075);}catch{} }
 
-function render() {
-  if (!incident) return;
-  renderStatus(); renderResponderList();
-  if (incident.state === IncidentState.CANCELLED_FALSE_ALARM) return renderCancelled();
-  if (incident.state === IncidentState.ACTIVATED) {
-    refs.decisionPanel.innerHTML = `<div class="activating-view"><p class="eyebrow danger-text">LOCAL EMERGENCY MODE STARTED</p><h2>STARTING HELP FLOW</h2><p>Location, microphone and simulated responder actions are beginning in parallel.</p></div>`;
-    speakOnce("activated", "Emergency mode active. This is a demonstration. Is the area safe to enter?");
-    return;
-  }
-  if (incident.state === IncidentState.ASSESSING) return renderQuestion();
-  if (incident.state === IncidentState.GUIDANCE) return renderGuidance();
-  if (incident.state === IncidentState.HANDOVER_READY) renderHandover();
-}
+function cancelEmergency(){ stopRhythm(false); if('speechSynthesis'in window)window.speechSynthesis.cancel(); dispatch({type:'CANCEL'}); if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{}); }
+function resetEmergency(){ cleanup(); incident=null;lastSpokenKey=null;refs.cancelButton.hidden=false;refs.emergencyScreen.hidden=true;refs.startScreen.hidden=false;refs.elapsedTime.textContent='00:00';document.body.classList.remove('emergency-active');refs.activateButton.focus(); }
+function cleanup(){ if(elapsedTimer)clearInterval(elapsedTimer);elapsedTimer=null;stopRhythm(false);if(wakeLock)wakeLock.release().catch(()=>{});wakeLock=null;if('speechSynthesis'in window)window.speechSynthesis.cancel(); }
+function showToast(message){refs.toast.textContent=message;refs.toast.hidden=false;if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(()=>refs.toast.hidden=true,3200);}
 
-function renderStatus() {
-  const summary = getResponderSummary(incident.responders);
-  refs.teamStatusValue.textContent = summary.onScene ? `${summary.onScene} ON SCENE` : summary.enRoute ? `${summary.enRoute} EN ROUTE` : summary.acknowledged ? `${summary.acknowledged} ACKNOWLEDGED` : "ALERTING DEMO";
-  refs.teamStatusDetail.textContent = `${summary.acknowledged} OF ${summary.total} ACK • SIMULATED`;
-  const location = incident.location;
-  if (location.status === "AVAILABLE") {
-    refs.locationStatusValue.textContent = `GPS ±${Math.round(location.accuracyMetres)}M`;
-    refs.locationStatusDetail.textContent = `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} • DEVICE ONLY`;
-  } else if (location.status === "REQUESTING") {
-    refs.locationStatusValue.textContent = "REQUESTING"; refs.locationStatusDetail.textContent = "DEMO SITE • LEEDS";
-  } else {
-    refs.locationStatusValue.textContent = `GPS ${location.status}`; refs.locationStatusDetail.textContent = "FALLBACK • LEVEL 3 • ZONE C";
-  }
-  const microphone = incident.microphone;
-  if (microphone.status === "LOCAL_ACTIVE") { refs.microphoneStatusValue.textContent = "LOCAL MIC ACTIVE"; refs.microphoneStatusDetail.textContent = "NOT SENT • NOT RECORDED"; }
-  else if (microphone.status === "REQUESTING") { refs.microphoneStatusValue.textContent = "REQUESTING"; refs.microphoneStatusDetail.textContent = "LOCAL PERMISSION"; }
-  else { refs.microphoneStatusValue.textContent = `MIC ${microphone.status}`; refs.microphoneStatusDetail.textContent = "FLOW CONTINUES"; refs.micMeterFill.style.width = "0%"; }
-}
-
-function renderQuestion() {
-  const copy = getQuestionCopy(incident.triage.currentQuestion); if (!copy) return;
-  const voiceUnavailable = !SpeechRecognition;
-  refs.decisionPanel.innerHTML = `<div class="question-view"><div class="instruction-copy"><p class="eyebrow">${copy.eyebrow}</p><h2>${copy.title}</h2><p>${copy.detail}</p></div><div class="answer-grid" aria-label="Answer choices"><button class="answer-button answer-yes" type="button" data-answer="YES">YES</button><button class="answer-button answer-no" type="button" data-answer="NO">NO</button><button class="answer-button answer-unknown" type="button" data-answer="UNKNOWN">NOT SURE</button><button class="answer-button answer-voice" type="button" data-voice-answer ${voiceUnavailable ? "disabled" : ""}>${voiceUnavailable ? "VOICE OFF" : recognitionActive ? "LISTENING" : "SPEAK"}<span>${voiceUnavailable ? "NOT SUPPORTED" : "SAY YES, NO OR NOT SURE"}</span></button></div></div>`;
-  refs.decisionPanel.querySelectorAll("[data-answer]").forEach((button) => button.addEventListener("click", () => answer(button.dataset.answer, "touch")));
-  refs.decisionPanel.querySelector("[data-voice-answer]")?.addEventListener("click", startVoiceAnswer);
-  speakOnce(incident.triage.currentQuestion, `${copy.title} ${copy.detail}`);
-}
-
-function renderGuidance() {
-  const guidance = getGuidanceCopy(incident.triage.guidance); if (!guidance) return;
-  refs.decisionPanel.innerHTML = `<div class="guidance-view"><div class="guidance-copy ${guidance.tone}"><p class="eyebrow">${guidance.eyebrow}</p><h2>${guidance.title}</h2><p>${guidance.action}</p><p class="guidance-secondary">${guidance.secondary}</p></div><div class="guidance-actions"><button class="call-action primary-call" type="button" data-call="999">CALL 999<span>OPENS DIALLER</span></button><button class="call-action" type="button" data-call="112">CALL 112<span>OPENS DIALLER</span></button><button class="next-action" type="button" data-handover>HANDOVER<span>SHOW THE PREPARED BRIEF</span></button><button class="next-action" type="button" data-repeat>READ AGAIN<span>VOICE GUIDANCE</span></button></div></div>`;
-  refs.decisionPanel.querySelectorAll("[data-call]").forEach((button) => button.addEventListener("click", () => openDialler(button.dataset.call)));
-  refs.decisionPanel.querySelector("[data-handover]")?.addEventListener("click", () => dispatch({ type: "HANDOVER_READY" }));
-  refs.decisionPanel.querySelector("[data-repeat]")?.addEventListener("click", () => speak(`${guidance.title}. ${guidance.action}. ${guidance.secondary}`));
-  speakOnce(incident.triage.guidance, `${guidance.title}. ${guidance.action}. ${guidance.secondary}`);
-}
-
-function renderHandover() {
-  const answers = incident.triage.answers; const value = (id) => answers[id]?.answer || "NOT ASKED";
-  const location = incident.location.status === "AVAILABLE" ? `GPS ±${Math.round(incident.location.accuracyMetres)}M` : "LEVEL 3 • ZONE C • VERIFY";
-  refs.decisionPanel.innerHTML = `<div class="handover-view"><p class="eyebrow">DEMO OPERATOR BRIEF • CHECK BEFORE SPEAKING</p><h2>HANDOVER READY</h2><div class="handover-grid"><div class="handover-item"><span>LOCATION</span><strong>${location}</strong></div><div class="handover-item"><span>SCENE SAFE</span><strong>${value("scene_safe")}</strong></div><div class="handover-item"><span>RESPONSIVE</span><strong>${value("responsive")}</strong></div><div class="handover-item"><span>BREATHING</span><strong>${value("breathing")}</strong></div><div class="handover-item"><span>SEVERE BLEEDING</span><strong>${value("severe_bleeding")}</strong></div><div class="handover-item"><span>TEAM RESPONSE</span><strong>${getResponderSummary(incident.responders).acknowledged} ACK • DEMO</strong></div></div><p>Read this to the operator. Do not play it automatically. Operator instructions always override the module.</p><div class="guidance-actions"><button class="call-action primary-call" type="button" data-call="999">CALL 999<span>OPENS DIALLER</span></button><button class="call-action" type="button" data-call="112">CALL 112<span>OPENS DIALLER</span></button></div></div>`;
-  refs.decisionPanel.querySelectorAll("[data-call]").forEach((button) => button.addEventListener("click", () => openDialler(button.dataset.call)));
-  speakOnce("handover", "Handover ready. Check the information and read it to the emergency operator.");
-}
-
-function renderCancelled() {
-  refs.cancelButton.hidden = true;
-  refs.decisionPanel.innerHTML = `<div class="cancelled-view"><p class="eyebrow danger-text">FALSE ALARM • LOCAL DEMO ONLY</p><h2>DEMO CANCELLED</h2><p>No real responders were alerted. No external cancellation was sent. Local microphone tracks have been stopped.</p><button class="reset-action" type="button" data-reset>RESET DEMO</button></div>`;
-  refs.decisionPanel.querySelector("[data-reset]")?.addEventListener("click", resetDemo);
-}
-
-function renderResponderList() {
-  refs.responderList.innerHTML = incident.responders.map((responder) => `<div class="responder-row"><div><strong>${responder.syntheticName}</strong><span>${responder.role} • SYNTHETIC</span></div><span class="responder-state">${responder.state}${responder.etaMinutes ? ` • ${responder.etaMinutes} MIN` : ""}</span></div>`).join("");
-}
-
-function answer(rawAnswer, source) { const answerValue = Answer[rawAnswer]; if (!answerValue) return; dispatch({ type: "ANSWER", answer: answerValue, source }); }
-
-function startVoiceAnswer() {
-  if (!SpeechRecognition || recognitionActive) return;
-  recognition = new SpeechRecognition(); recognition.lang = navigator.language || "en-GB"; recognition.interimResults = false; recognition.maxAlternatives = 1; recognition.continuous = false; recognitionActive = true; renderQuestion();
-  recognition.addEventListener("result", (event) => {
-    const words = String(event.results?.[0]?.[0]?.transcript || "").toLowerCase().trim(); recognitionActive = false;
-    const unknownWords = ["not sure", "unknown", "don't know", "do not know", "nie wiem"]; const noWords = ["no", "unsafe", "not safe", "nie"]; const yesWords = ["yes", "safe", "tak"];
-    if (unknownWords.some((phrase) => words.includes(phrase))) answer("UNKNOWN", "voice");
-    else if (noWords.some((phrase) => words === phrase || words.includes(`${phrase} `))) answer("NO", "voice");
-    else if (yesWords.some((phrase) => words === phrase || words.includes(`${phrase} `))) answer("YES", "voice");
-    else { showToast("VOICE ANSWER NOT UNDERSTOOD • USE A LARGE BUTTON"); renderQuestion(); }
-  });
-  recognition.addEventListener("error", () => { recognitionActive = false; showToast("VOICE INPUT UNAVAILABLE • USE A LARGE BUTTON"); renderQuestion(); });
-  recognition.addEventListener("end", () => { if (recognitionActive) { recognitionActive = false; renderQuestion(); } });
-  try { recognition.start(); } catch { recognitionActive = false; showToast("VOICE INPUT UNAVAILABLE • USE A LARGE BUTTON"); renderQuestion(); }
-}
-
-function openDialler(number) { dispatch({ type: "CALL_DIALER_OPENED", number }); showToast(`OPENING ${number} DIALLER • CONNECTION NOT CONFIRMED`); window.location.href = `tel:${number}`; }
-function toggleVoice() { voiceEnabled = !voiceEnabled; refs.voiceToggle.textContent = voiceEnabled ? "VOICE ON" : "VOICE OFF"; refs.voiceToggle.setAttribute("aria-pressed", String(voiceEnabled)); if (!voiceEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel(); if (voiceEnabled) { lastSpokenKey = null; render(); } }
-function speakOnce(key, words) { if (!voiceEnabled || key === lastSpokenKey) return; lastSpokenKey = key; speak(words); }
-function speak(words) { if (!voiceEnabled || !("speechSynthesis" in window)) return; window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(words); utterance.lang = "en-GB"; utterance.rate = 0.92; utterance.pitch = 1; window.speechSynthesis.speak(utterance); }
-
-function cancelDemo() { cleanupLiveResources(); dispatch({ type: "CANCEL" }); if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); }
-function resetDemo() { cleanupLiveResources(); incident = null; lastSpokenKey = null; refs.cancelButton.hidden = false; refs.emergencyScreen.hidden = true; refs.startScreen.hidden = false; refs.elapsedTime.textContent = "00:00"; refs.micMeterFill.style.width = "0%"; document.body.classList.remove("emergency-active"); refs.activateButton.focus(); }
-
-function cleanupLiveResources() {
-  responderTimers.forEach((timer) => window.clearTimeout(timer)); responderTimers = [];
-  if (elapsedTimer) window.clearInterval(elapsedTimer); elapsedTimer = null;
-  if (levelFrame) window.cancelAnimationFrame(levelFrame); levelFrame = null;
-  mediaStream?.getTracks().forEach((track) => track.stop()); mediaStream = null;
-  analyser?.disconnect(); analyser = null; audioContext?.close().catch(() => {}); audioContext = null;
-  recognition?.abort(); recognition = null; recognitionActive = false;
-  if (wakeLock) wakeLock.release().catch(() => {}); wakeLock = null;
-  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-}
-
-function showToast(message) { refs.toast.textContent = message; refs.toast.hidden = false; if (toastTimer) window.clearTimeout(toastTimer); toastTimer = window.setTimeout(() => { refs.toast.hidden = true; }, 3200); }
-function openResponders() { renderResponderList(); if (typeof refs.responderDialog.showModal === "function") refs.responderDialog.showModal(); else refs.responderDialog.setAttribute("open", ""); }
-function closeResponders() { if (typeof refs.responderDialog.close === "function") refs.responderDialog.close(); else refs.responderDialog.removeAttribute("open"); }
-
-refs.activateButton.addEventListener("click", activateDemo);
-refs.voiceToggle.addEventListener("click", toggleVoice);
-refs.cancelButton.addEventListener("click", cancelDemo);
-refs.teamStatus.addEventListener("click", openResponders);
-refs.closeResponderDialog.addEventListener("click", closeResponders);
-refs.acknowledgeDemo.addEventListener("click", () => { dispatch({ type: "RESPONDER_UPDATE", id: "demo-first-aider-1", state: "EN_ROUTE", etaMinutes: 2 }); showToast("SIMULATED FIRST AIDER EN ROUTE • 2 MIN"); closeResponders(); });
-refs.unavailableDemo.addEventListener("click", () => { dispatch({ type: "RESPONDER_UPDATE", id: "demo-first-aider-1", state: "UNAVAILABLE" }); showToast("SIMULATED RESPONDER UNAVAILABLE • ESCALATION WOULD CONTINUE"); closeResponders(); });
-refs.joinAudioDemo.addEventListener("click", () => showToast("LIVE AUDIO NEEDS THE FUTURE SECURE BACKEND • NOT CONNECTED"));
-
-window.addEventListener("beforeunload", cleanupLiveResources);
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && incident && !wakeLock) requestWakeLock(); });
-if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js").catch(() => {}));
+refs.activateButton.addEventListener('click',activateEmergency);
+refs.voiceToggle.addEventListener('click',toggleVoice);
+refs.cancelButton.addEventListener('click',cancelEmergency);
+refs.callStatus.addEventListener('click',openCallDialog);
+refs.locationStatus.addEventListener('click',requestLocation);
+refs.closeCallDialog.addEventListener('click',closeCallDialog);
+refs.callDialog.addEventListener('click',(e)=>{const b=e.target.closest('[data-call]');if(b){closeCallDialog();openDialler(b.dataset.call);}});
+window.addEventListener('beforeunload',cleanup);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&incident&&!wakeLock)requestWakeLock();});
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
