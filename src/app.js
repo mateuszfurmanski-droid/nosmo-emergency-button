@@ -1,597 +1,271 @@
 import {
   Answer,
-  Question,
-  Screen,
-  answerTriage,
-  beginEmergency,
-  chooseCprAge,
-  createState,
-  goToCprSelect,
-  openLocation,
-  openScenario,
-  openScenarioPicker,
-  openSymptoms,
-  resetEmergency,
-  routeSymptomMatch,
-  setLanguage,
-  setLocationStatus,
-  setSymptomResult,
-} from './emergency-state.js';
-import { getScenario, quickScenarioIds, routeSymptoms, scenarioGroups, scenarios } from './emergency-data.js';
-import { LANGUAGES, getLanguage, hasDirectTranslation, supportedLanguage, translate as t } from './i18n.js';
+  Guidance,
+  IncidentState,
+  createIncident,
+  getGuidanceCopy,
+  getQuestionCopy,
+  getResponderSummary,
+  reduceIncident,
+} from "./emergency-state.js";
 
-const app = document.querySelector('#app');
-const languageDialog = document.querySelector('#languageDialog');
-const languageList = document.querySelector('#languageList');
-const languageDialogTitle = document.querySelector('#languageDialogTitle');
-const sourcesDialog = document.querySelector('#sourcesDialog');
-const sourcesDialogTitle = document.querySelector('#sourcesDialogTitle');
-const sourcesContent = document.querySelector('#sourcesContent');
-const toast = document.querySelector('#toast');
-
-const storedLanguage = safeStorageGet('nosmo-emergency-language');
-const browserLanguage = String(navigator.language || 'en').slice(0, 2).toLowerCase();
-const initialLanguage = supportedLanguage(storedLanguage) ? storedLanguage : supportedLanguage(browserLanguage) ? browserLanguage : 'en';
-let state = createState(initialLanguage);
-let locationReturnScreen = Screen.HOME;
-let installPrompt = null;
-let toastTimer = null;
-let recognition = null;
-let speaking = false;
-let rhythmTimer = null;
-let rhythmAudio = null;
-let rhythmActive = false;
-let hapticEnabled = true;
-
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
-
-function safeStorageGet(key) {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function safeStorageSet(key, value) {
-  try { localStorage.setItem(key, value); } catch { /* preference persistence is optional */ }
-}
-
-function tr(key, variables) { return t(state.language, key, variables); }
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[character]));
-}
-
-function setDocumentLanguage() {
-  const language = getLanguage(state.language);
-  document.documentElement.lang = language.locale;
-  document.documentElement.dir = language.dir;
-  document.title = tr('app_name');
-}
-
-function header() {
-  const language = getLanguage(state.language);
-  return `
-    <header class="topbar">
-      <div class="brand" aria-label="NOSMO Emergency Button">
-        <div class="brand-mark" aria-hidden="true">N</div>
-        <div class="brand-copy"><strong>NOSMO</strong><span>${escapeHtml(tr('emergency_help'))}</span></div>
-      </div>
-      <button class="lang-button" type="button" data-language aria-label="${escapeHtml(tr('current_language'))}: ${escapeHtml(language.nativeName)}">
-        <span class="lang-flag" aria-hidden="true">${language.flag}</span><span class="lang-name">${escapeHtml(language.nativeName)}</span>
-      </button>
-    </header>`;
-}
-
-function stickyEmergencyBar() {
-  if (!state.emergencyActive) return '';
-  const language = getLanguage(state.language);
-  return `
-    <div class="emergency-sticky" role="region" aria-label="${escapeHtml(tr('emergency_mode'))}">
-      <div class="active-line">
-        <span class="active-pill">● ${escapeHtml(tr('emergency_mode'))}</span>
-        <div class="sticky-tools">
-          <button class="mini-button" type="button" data-location aria-label="${escapeHtml(tr('location'))}">⌖</button>
-          <button class="mini-button" type="button" data-language aria-label="${escapeHtml(tr('current_language'))}: ${escapeHtml(language.nativeName)}">${language.flag}</button>
-          <button class="mini-button" type="button" data-reset aria-label="${escapeHtml(tr('reset_emergency'))}">×</button>
-        </div>
-      </div>
-      <div class="sticky-actions">
-        <button class="sticky-call" type="button" data-call="999">☎ ${escapeHtml(tr('call_999'))}</button>
-        <button class="sticky-call secondary" type="button" data-call="112">☎ ${escapeHtml(tr('call_112'))}</button>
-      </div>
-    </div>`;
-}
-
-function renderHome() {
-  const quick = quickScenarioIds.map((id) => {
-    const scenario = scenarios[id];
-    return `<button class="tile critical" type="button" data-scenario="${id}"><span class="tile-icon" aria-hidden="true">${scenario.icon}</span><span>${escapeHtml(tr(scenario.titleKey))}</span></button>`;
-  }).join('');
-  const installControl = isStandalone
-    ? `<div class="utility-button install" role="status">✓ ${escapeHtml(tr('installed'))}</div>`
-    : installPrompt
-      ? `<button class="utility-button install" type="button" data-install>＋ ${escapeHtml(tr('install_app'))}</button>`
-      : '';
-  return `
-    ${header()}
-    <div class="safety-strip"><strong>999 / 112:</strong> ${escapeHtml(tr('safety_disclaimer'))}</div>
-    <main>
-      <section class="activation-wrap" aria-label="${escapeHtml(tr('emergency_button'))}">
-        <button class="emergency-button" type="button" data-emergency aria-describedby="emergencyTruth">
-          <span class="sos">SOS</span><span class="emergency-word">${escapeHtml(tr('emergency_button'))}</span><span class="press">${escapeHtml(tr('press_for_help'))}</span>
-        </button>
-      </section>
-      <div class="call-grid" id="emergencyTruth">
-        <button class="call-button primary" type="button" data-call="999"><span aria-hidden="true">☎</span>${escapeHtml(tr('call_999'))}</button>
-        <button class="call-button" type="button" data-call="112"><span aria-hidden="true">☎</span>${escapeHtml(tr('call_112'))}</button>
-      </div>
-      <h2 class="section-title">${escapeHtml(tr('quick_help'))}</h2>
-      <div class="quick-grid">
-        <button class="tile critical" type="button" data-cpr-select><span class="tile-icon" aria-hidden="true">♥</span><span>${escapeHtml(tr('cpr_not_breathing'))}</span></button>
-        ${quick}
-        <button class="tile full accent" type="button" data-symptoms><span class="tile-icon" aria-hidden="true">⌨</span><span>${escapeHtml(tr('describe_symptoms'))}</span></button>
-        <button class="tile full" type="button" data-picker><span class="tile-icon" aria-hidden="true">＋</span><span>${escapeHtml(tr('more_emergencies'))}</span></button>
-      </div>
-      <div class="utility-row">
-        <button class="utility-button" type="button" data-location>⌖ ${escapeHtml(tr('location'))}</button>
-        ${installControl}
-      </div>
-      <div class="offline-badge">✓ ${escapeHtml(tr('offline_ready'))}</div>
-      <div class="footer-actions"><button class="link-button" type="button" data-sources>${escapeHtml(tr('sources'))}</button></div>
-    </main>`;
-}
-
-const questionMap = {
-  [Question.SCENE_SAFE]: ['question_scene_title', 'question_scene_detail'],
-  [Question.RESPONSIVE]: ['question_responsive_title', 'question_responsive_detail'],
-  [Question.BREATHING]: ['question_breathing_title', 'question_breathing_detail'],
-  [Question.SEVERE_BLEEDING]: ['question_bleeding_title', 'question_bleeding_detail'],
+const refs = {
+  startScreen: document.querySelector("#startScreen"),
+  emergencyScreen: document.querySelector("#emergencyScreen"),
+  activateButton: document.querySelector("#activateButton"),
+  elapsedTime: document.querySelector("#elapsedTime"),
+  voiceToggle: document.querySelector("#voiceToggle"),
+  teamStatus: document.querySelector("#teamStatus"),
+  teamStatusValue: document.querySelector("#teamStatusValue"),
+  teamStatusDetail: document.querySelector("#teamStatusDetail"),
+  locationStatusValue: document.querySelector("#locationStatusValue"),
+  locationStatusDetail: document.querySelector("#locationStatusDetail"),
+  microphoneStatusValue: document.querySelector("#microphoneStatusValue"),
+  microphoneStatusDetail: document.querySelector("#microphoneStatusDetail"),
+  micMeterFill: document.querySelector("#micMeterFill"),
+  decisionPanel: document.querySelector("#decisionPanel"),
+  cancelButton: document.querySelector("#cancelButton"),
+  responderDialog: document.querySelector("#responderDialog"),
+  responderList: document.querySelector("#responderList"),
+  acknowledgeDemo: document.querySelector("#acknowledgeDemo"),
+  unavailableDemo: document.querySelector("#unavailableDemo"),
+  joinAudioDemo: document.querySelector("#joinAudioDemo"),
+  closeResponderDialog: document.querySelector("#closeResponderDialog"),
+  toast: document.querySelector("#toast"),
 };
 
-function renderTriage() {
-  const [titleKey, detailKey] = questionMap[state.triage.currentQuestion] || [];
-  const unresponsive = state.triage.currentQuestion === Question.BREATHING && state.triage.answers[Question.RESPONSIVE] !== Answer.YES;
-  const stepNumber = [Question.SCENE_SAFE, Question.RESPONSIVE, Question.BREATHING, Question.SEVERE_BLEEDING].indexOf(state.triage.currentQuestion) + 1;
-  return `
-    ${header()}${stickyEmergencyBar()}
-    ${unresponsive ? `<div class="alert-banner" role="alert">☎ ${escapeHtml(tr('unresponsive_call_banner'))}</div>` : ''}
-    <main class="question-card">
-      <div class="step-eyebrow">${escapeHtml(tr('step_label'))} ${stepNumber}</div>
-      <h1>${escapeHtml(tr(titleKey))}</h1>
-      <p>${escapeHtml(tr(detailKey))}</p>
-      <div class="answer-stack" aria-label="Answer choices">
-        <button class="answer-button yes" type="button" data-answer="YES">${escapeHtml(tr('yes'))}</button>
-        <button class="answer-button no" type="button" data-answer="NO">${escapeHtml(tr('no'))}</button>
-        <button class="answer-button unknown" type="button" data-answer="UNKNOWN">${escapeHtml(tr('unknown'))}</button>
-      </div>
-    </main>`;
-}
+let incident = null;
+let voiceEnabled = true;
+let lastSpokenKey = null;
+let elapsedTimer = null;
+let responderTimers = [];
+let toastTimer = null;
+let mediaStream = null;
+let audioContext = null;
+let analyser = null;
+let levelFrame = null;
+let wakeLock = null;
+let recognition = null;
+let recognitionActive = false;
 
-function renderPicker() {
-  const groups = scenarioGroups.map((group) => {
-    const buttons = group.scenarioIds.map((id) => {
-      const scenario = getScenario(id);
-      if (!scenario) return '';
-      return `<button class="scenario-button ${scenario.lifeThreatening ? 'life' : ''}" type="button" data-scenario="${id}">
-        <span class="scenario-icon" aria-hidden="true">${scenario.icon}</span><span>${escapeHtml(tr(scenario.titleKey))}</span>${scenario.lifeThreatening ? `<span class="risk">999</span>` : ''}
-      </button>`;
-    }).join('');
-    return `<section class="scenario-group"><h2>${escapeHtml(tr(group.titleKey))}</h2><div class="scenario-list">${buttons}</div></section>`;
-  }).join('');
-  return `
-    ${header()}${stickyEmergencyBar()}
-    <main>
-      <div class="screen-head"><button class="back-button" type="button" data-back aria-label="${escapeHtml(tr('back'))}">←</button><div><h1>${escapeHtml(tr('pick_title'))}</h1><p>${escapeHtml(tr('pick_detail'))}</p></div></div>
-      <button class="tile full accent" type="button" data-symptoms><span class="tile-icon" aria-hidden="true">⌨</span><span>${escapeHtml(tr('describe_symptoms'))}</span></button>
-      <div class="picker-groups" style="margin-top:18px">${groups}</div>
-    </main>`;
-}
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-function scenarioSteps(scenario) {
-  return scenario.steps.map((key) => {
-    const fallback = state.language !== 'en' && !hasDirectTranslation(state.language, key);
-    return `<div class="guidance-step ${fallback ? 'fallback' : ''}"><div><p>${escapeHtml(tr(key))}</p>${fallback ? `<span class="fallback-note">EN: ${escapeHtml(tr('english_fallback'))}</span>` : ''}</div></div>`;
-  }).join('');
-}
+function now() { return new Date().toISOString(); }
 
-function renderScenario() {
-  const scenario = getScenario(state.scenarioId);
-  if (!scenario) return renderPicker();
-  return `
-    ${header()}${stickyEmergencyBar()}
-    <main>
-      <div class="screen-head"><button class="back-button" type="button" data-back aria-label="${escapeHtml(tr('back'))}">←</button></div>
-      <section class="scenario-hero ${scenario.lifeThreatening ? 'life' : ''}">
-        <div class="scenario-icon-large" aria-hidden="true">${scenario.icon}</div>
-        <h1>${escapeHtml(tr(scenario.titleKey))}</h1>
-        <p class="operator">${escapeHtml(tr('operator_priority'))}</p>
-      </section>
-      <div class="guidance-list">${scenarioSteps(scenario)}</div>
-      ${scenario.emergencyCriteriaKey ? `<div class="criteria-card"><strong>${escapeHtml(tr('emergency_criteria'))}</strong>${escapeHtml(tr(scenario.emergencyCriteriaKey))}</div>` : ''}
-      <div class="scenario-actions">
-        <button class="action-button blue" type="button" data-read>🔊 ${escapeHtml(tr('read_aloud'))}</button>
-        <button class="action-button" type="button" data-location>⌖ ${escapeHtml(tr('location'))}</button>
-      </div>
-    </main>`;
-}
-
-function renderCprSelect() {
-  return `
-    ${header()}${stickyEmergencyBar()}
-    <main>
-      <div class="screen-head"><button class="back-button" type="button" data-back aria-label="${escapeHtml(tr('back'))}">←</button><div><h1>${escapeHtml(tr('cpr_choose_title'))}</h1><p>${escapeHtml(tr('cpr_choose_detail'))}</p></div></div>
-      <div class="alert-banner">☎ ${escapeHtml(tr('call_now'))}: 999 / 112</div>
-      <div class="cpr-age-grid">
-        <button class="age-button" type="button" data-cpr-age="adult"><strong>${escapeHtml(tr('adult'))}</strong><span>${escapeHtml(tr('adult_age'))}</span></button>
-        <button class="age-button" type="button" data-cpr-age="child"><strong>${escapeHtml(tr('child'))}</strong><span>${escapeHtml(tr('child_age'))}</span></button>
-        <button class="age-button" type="button" data-cpr-age="infant"><strong>${escapeHtml(tr('infant'))}</strong><span>${escapeHtml(tr('infant_age'))}</span></button>
-      </div>
-    </main>`;
-}
-
-function renderCpr() {
-  const scenario = getScenario(state.scenarioId);
-  if (!scenario) return renderCprSelect();
-  return `
-    ${header()}${stickyEmergencyBar()}
-    <main>
-      <div class="screen-head"><button class="back-button" type="button" data-back aria-label="${escapeHtml(tr('back'))}">←</button><div><h1>${escapeHtml(tr('cpr_title'))}</h1></div></div>
-      <section class="scenario-hero life"><div class="scenario-icon-large" aria-hidden="true">♥</div><h1>${escapeHtml(tr(scenario.titleKey))}</h1><p class="operator">${escapeHtml(tr('operator_priority'))}</p></section>
-      <section class="rhythm-panel" aria-label="CPR compression rhythm">
-        <div id="rhythmOrb" class="rhythm-orb" aria-hidden="true">110</div>
-        <button class="rhythm-button" type="button" data-rhythm aria-pressed="${rhythmActive}">${escapeHtml(tr(rhythmActive ? 'stop_rhythm' : 'start_rhythm'))}</button>
-        <p class="rhythm-note">${escapeHtml(tr('rhythm_note'))}</p>
-      </section>
-      <div class="guidance-list">${scenarioSteps(scenario)}</div>
-      <div class="scenario-actions">
-        <button class="action-button blue" type="button" data-read>🔊 ${escapeHtml(tr('read_aloud'))}</button>
-        <button class="action-button" type="button" data-haptic>${escapeHtml(tr(hapticEnabled ? 'haptic_on' : 'haptic_off'))}</button>
-      </div>
-    </main>`;
-}
-
-function renderSymptoms() {
-  return `
-    ${header()}${stickyEmergencyBar()}
-    <main>
-      <div class="screen-head"><button class="back-button" type="button" data-back aria-label="${escapeHtml(tr('back'))}">←</button><div><h1>${escapeHtml(tr('describe_symptoms'))}</h1></div></div>
-      <div class="symptom-box">
-        <textarea id="symptomInput" autocomplete="off" autocapitalize="sentences" spellcheck="true" placeholder="${escapeHtml(tr('search_placeholder'))}" aria-label="${escapeHtml(tr('describe_symptoms'))}">${escapeHtml(state.symptomQuery)}</textarea>
-        <div class="symptom-actions">
-          <button class="search-button" type="button" data-route-symptoms>${escapeHtml(tr('search_action'))}</button>
-          <button class="voice-button" type="button" data-voice-input ${SpeechRecognition ? '' : 'disabled'}>${SpeechRecognition ? '🎙 ' + escapeHtml(tr('voice_input')) : escapeHtml(tr('voice_unavailable'))}</button>
-        </div>
-        <p class="privacy-note">${escapeHtml(tr('symptom_privacy'))}</p>
-      </div>
-      ${state.symptomMatch === false ? `<div class="no-match" role="status"><h2>${escapeHtml(tr('no_match_title'))}</h2><p>${escapeHtml(tr('no_match_detail'))}</p><button class="action-button" style="width:100%;margin-top:12px" type="button" data-picker>${escapeHtml(tr('more_emergencies'))}</button></div>` : ''}
-    </main>`;
-}
-
-function renderLocation() {
-  const location = state.location;
-  let statusText = tr('location_idle');
-  if (location.status === 'LOCATING') statusText = tr('locating');
-  if (location.status === 'AVAILABLE') statusText = tr('location_ready');
-  if (location.status === 'DENIED') statusText = tr('location_denied');
-  if (location.status === 'UNAVAILABLE') statusText = tr('location_unavailable');
-  const coords = location.status === 'AVAILABLE' ? `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}` : '—';
-  return `
-    ${header()}${stickyEmergencyBar()}
-    <main>
-      <div class="screen-head"><button class="back-button" type="button" data-location-back aria-label="${escapeHtml(tr('back'))}">←</button><div><h1>${escapeHtml(tr('location'))}</h1></div></div>
-      <section class="location-card">
-        <div class="location-status">${escapeHtml(statusText)}</div>
-        <div class="location-coords" aria-live="assertive">${escapeHtml(coords)}</div>
-        <div class="location-accuracy">${location.status === 'AVAILABLE' ? `${escapeHtml(tr('accuracy'))}: ±${Math.round(location.accuracyMetres)} m` : ''}</div>
-        <button class="location-main" type="button" data-get-location>⌖ ${escapeHtml(tr('get_location'))}</button>
-        ${location.status === 'AVAILABLE' ? `<div class="location-actions"><button class="location-action" type="button" data-copy-location>${escapeHtml(tr('copy_location'))}</button><button class="location-action" type="button" data-share-location>${escapeHtml(tr('share_location'))}</button></div>` : ''}
-        <p class="privacy-note">${escapeHtml(tr('location_privacy'))}</p>
-      </section>
-    </main>`;
-}
-
-function render() {
-  setDocumentLanguage();
-  if (state.screen !== Screen.CPR && rhythmActive) stopRhythm();
-  if (state.screen === Screen.HOME) app.innerHTML = renderHome();
-  else if (state.screen === Screen.TRIAGE) app.innerHTML = renderTriage();
-  else if (state.screen === Screen.PICK_SCENARIO) app.innerHTML = renderPicker();
-  else if (state.screen === Screen.SCENARIO) app.innerHTML = renderScenario();
-  else if (state.screen === Screen.CPR_SELECT) app.innerHTML = renderCprSelect();
-  else if (state.screen === Screen.CPR) app.innerHTML = renderCpr();
-  else if (state.screen === Screen.SYMPTOMS) app.innerHTML = renderSymptoms();
-  else if (state.screen === Screen.LOCATION) app.innerHTML = renderLocation();
-  else app.innerHTML = renderHome();
-  window.scrollTo({ top:0, behavior:'instant' });
-}
-
-function callEmergency(number) {
-  stopSpeech();
-  showToast(`${number} — ${tr('opens_dialler')}`);
-  window.location.href = `tel:${number}`;
-}
-
-function startEmergency() {
-  stopSpeech();
-  state = beginEmergency(state);
-  if (navigator.vibrate) navigator.vibrate([70, 40, 70]);
+function dispatch(action) {
+  if (!incident) return;
+  incident = reduceIncident(incident, action, now());
   render();
 }
 
-function openLanguageDialog() {
-  languageDialogTitle.textContent = tr('current_language');
-  languageList.innerHTML = LANGUAGES.map((language) => `<button class="language-option" type="button" data-language-code="${language.code}" aria-current="${state.language === language.code}"><span class="flag" aria-hidden="true">${language.flag}</span><span class="lang-meta"><span class="native">${escapeHtml(language.nativeName)}</span><span class="english">${escapeHtml(language.name)}</span></span></button>`).join('');
-  showDialog(languageDialog);
-}
-
-function chooseLanguage(code) {
-  if (!supportedLanguage(code)) return;
-  state = setLanguage(state, code);
-  safeStorageSet('nosmo-emergency-language', code);
-  closeDialog(languageDialog);
+function activateDemo() {
+  if (incident) return;
+  incident = createIncident(now());
+  refs.startScreen.hidden = true;
+  refs.emergencyScreen.hidden = false;
+  document.body.classList.add("emergency-active");
   render();
+  dispatch({ type: "BEGIN_ASSESSMENT" });
+  startElapsedTimer();
+  startResponderSimulation();
+  requestDeviceFullscreen();
+  requestWakeLock();
+  requestLocation();
+  requestLocalMicrophone();
 }
 
-function openSourcesDialog() {
-  sourcesDialogTitle.textContent = tr('sources');
-  sourcesContent.innerHTML = `
-    <div class="source-badge"><strong>${escapeHtml(tr('not_replacement'))}</strong><p>${escapeHtml(tr('safety_disclaimer'))}</p></div>
-    <p>${escapeHtml(tr('source_detail'))}</p>
-    <p>${escapeHtml(tr('source_review'))}</p>
-    <h3>UK source set</h3>
-    <ul>
-      <li>Resuscitation Council UK — 2025 Resuscitation Guidelines, Adult Basic Life Support, Paediatric Basic Life Support, First Aid.</li>
-      <li>NHS — first aid, stroke, heart attack, seizures, poisoning and burns guidance.</li>
-      <li>British Red Cross — first aid guidance.</li>
-      <li>St John Ambulance — first aid advice.</li>
-    </ul>
-    <p>${escapeHtml(tr('source_footer'))}</p>`;
-  showDialog(sourcesDialog);
+async function requestDeviceFullscreen() {
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+  } catch { showToast("FULLSCREEN API UNAVAILABLE • VIEWPORT MODE IS STILL ACTIVE"); }
 }
 
-function showDialog(dialog) {
-  if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
-}
-function closeDialog(dialog) {
-  if (typeof dialog.close === 'function') dialog.close(); else dialog.removeAttribute('open');
-}
-
-function goBack() {
-  stopSpeech();
-  if (state.screen === Screen.SCENARIO || state.screen === Screen.CPR_SELECT || state.screen === Screen.CPR) {
-    state = { ...state, screen: Screen.PICK_SCENARIO, scenarioId:null, cprAge:null };
-  } else if (state.screen === Screen.PICK_SCENARIO) {
-    if (state.emergencyActive) state = resetEmergency(state); else state = { ...state, screen:Screen.HOME };
-  } else if (state.screen === Screen.SYMPTOMS) {
-    state = { ...state, screen: state.emergencyActive ? Screen.PICK_SCENARIO : Screen.HOME, symptomMatch:null };
-  } else {
-    state = { ...state, screen:Screen.HOME };
-  }
-  render();
-}
-
-function endEmergency() {
-  if (!window.confirm(tr('reset_confirm'))) return;
-  stopSpeech();
-  stopRhythm();
-  state = resetEmergency(state);
-  render();
-}
-
-function openLocationScreen() {
-  if (state.screen !== Screen.LOCATION) locationReturnScreen = state.screen;
-  state = openLocation(state);
-  render();
-}
-function returnFromLocation() {
-  state = { ...state, screen: locationReturnScreen || Screen.HOME };
-  render();
+async function requestWakeLock() {
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch { wakeLock = null; }
 }
 
 function requestLocation() {
-  if (!navigator.geolocation) {
-    state = setLocationStatus(state, { status:'UNAVAILABLE', latitude:null, longitude:null, accuracyMetres:null });
-    render();
-    return;
-  }
-  state = setLocationStatus(state, { status:'LOCATING' });
-  render();
+  if (!("geolocation" in navigator)) { dispatch({ type: "LOCATION_FAILED", status: "UNAVAILABLE" }); return; }
   navigator.geolocation.getCurrentPosition(
-    (position) => {
-      state = setLocationStatus(state, { status:'AVAILABLE', latitude:position.coords.latitude, longitude:position.coords.longitude, accuracyMetres:position.coords.accuracy });
-      render();
-    },
-    (error) => {
-      state = setLocationStatus(state, { status:error.code === error.PERMISSION_DENIED ? 'DENIED' : 'UNAVAILABLE', latitude:null, longitude:null, accuracyMetres:null });
-      render();
-    },
-    { enableHighAccuracy:true, timeout:8000, maximumAge:15000 },
+    (position) => dispatch({ type: "LOCATION_AVAILABLE", latitude: position.coords.latitude, longitude: position.coords.longitude, accuracyMetres: position.coords.accuracy }),
+    (error) => dispatch({ type: "LOCATION_FAILED", status: error.code === error.PERMISSION_DENIED ? "DENIED" : "UNAVAILABLE" }),
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 },
   );
 }
 
-function locationText() {
-  if (state.location.status !== 'AVAILABLE') return '';
-  return `Latitude ${state.location.latitude.toFixed(6)}, longitude ${state.location.longitude.toFixed(6)}, accuracy approximately ${Math.round(state.location.accuracyMetres)} metres`;
-}
-async function copyLocation() {
-  const text = locationText();
-  if (!text) return;
+async function requestLocalMicrophone() {
+  if (!navigator.mediaDevices?.getUserMedia) { dispatch({ type: "MICROPHONE_FAILED", status: "UNAVAILABLE" }); return; }
   try {
-    await navigator.clipboard.writeText(text);
-    showToast(tr('copied'));
-  } catch {
-    fallbackCopy(text);
-    showToast(tr('copied'));
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true }, video: false });
+    dispatch({ type: "MICROPHONE_ACTIVE" });
+    startLocalLevelMeter(mediaStream);
+  } catch (error) {
+    dispatch({ type: "MICROPHONE_FAILED", status: error?.name === "NotAllowedError" ? "DENIED" : "UNAVAILABLE" });
   }
 }
-async function shareLocation() {
-  const text = locationText();
-  if (!text) return;
-  if (navigator.share) {
-    try { await navigator.share({ title:'Emergency location', text }); return; } catch (error) { if (error?.name === 'AbortError') return; }
-  }
-  await copyLocation();
-  showToast(tr('share_not_supported'));
-}
-function fallbackCopy(text) {
-  const area = document.createElement('textarea');
-  area.value = text; area.setAttribute('readonly', ''); area.style.position='fixed'; area.style.opacity='0'; document.body.append(area); area.select();
-  try { document.execCommand('copy'); } catch { /* browser may deny clipboard */ }
-  area.remove();
-}
 
-function routeSymptomsNow() {
-  const input = document.querySelector('#symptomInput');
-  const query = String(input?.value || state.symptomQuery || '').trim();
-  const match = routeSymptoms(query);
-  state = setSymptomResult(state, query, match || false);
-  if (match) state = routeSymptomMatch(state, match);
-  render();
-}
-
-function startVoiceInput() {
-  if (!SpeechRecognition) return;
-  stopSpeech();
-  recognition?.abort();
-  recognition = new SpeechRecognition();
-  recognition.lang = getLanguage(state.language).locale;
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  recognition.continuous = false;
-  const button = document.querySelector('[data-voice-input]');
-  if (button) button.textContent = tr('listening');
-  recognition.addEventListener('result', (event) => {
-    const transcript = String(event.results?.[0]?.[0]?.transcript || '').trim();
-    const input = document.querySelector('#symptomInput');
-    if (input) input.value = transcript;
-    state = { ...state, symptomQuery: transcript };
-    routeSymptomsNow();
-  });
-  recognition.addEventListener('error', () => { showToast(tr('voice_unavailable')); render(); });
-  recognition.addEventListener('end', () => { recognition = null; });
-  try { recognition.start(); } catch { showToast(tr('voice_unavailable')); }
-}
-
-function readCurrentGuidance() {
-  const scenario = getScenario(state.scenarioId);
-  if (!scenario || !('speechSynthesis' in window)) return;
-  if (speaking) { stopSpeech(); render(); return; }
-  const language = getLanguage(state.language);
-  const words = [tr(scenario.titleKey), tr('operator_priority'), ...scenario.steps.map((key) => tr(key))].join('. ');
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(words);
-  utterance.lang = language.locale;
-  const voices = window.speechSynthesis.getVoices();
-  const prefix = language.locale.slice(0, 2).toLowerCase();
-  const voice = voices.find((candidate) => candidate.lang?.toLowerCase().startsWith(prefix));
-  if (voice) utterance.voice = voice;
-  utterance.rate = 0.9;
-  utterance.addEventListener('end', () => { speaking = false; render(); });
-  utterance.addEventListener('error', () => { speaking = false; });
-  speaking = true;
-  window.speechSynthesis.speak(utterance);
-}
-function stopSpeech() {
-  recognition?.abort(); recognition = null;
-  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-  speaking = false;
-}
-
-function startRhythm() {
-  if (rhythmActive) { stopRhythm(); render(); return; }
-  rhythmActive = true;
-  const interval = Math.round(60000 / 110);
-  let beatCount = 0;
-  const beat = () => {
-    const orb = document.querySelector('#rhythmOrb');
-    if (orb) { orb.classList.add('beat'); window.setTimeout(() => orb.classList.remove('beat'), 105); }
-    beep();
-    beatCount += 1;
-    if (hapticEnabled && navigator.vibrate && beatCount % 2 === 0) navigator.vibrate(35);
-  };
-  beat();
-  rhythmTimer = window.setInterval(beat, interval);
-  render();
-}
-function stopRhythm() {
-  if (rhythmTimer) window.clearInterval(rhythmTimer);
-  rhythmTimer = null; rhythmActive = false;
-  if (rhythmAudio) { rhythmAudio.close().catch(() => {}); rhythmAudio = null; }
-  if (navigator.vibrate) navigator.vibrate(0);
-}
-function beep() {
+function startLocalLevelMeter(stream) {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
-    if (!rhythmAudio) rhythmAudio = new AudioContext();
-    const oscillator = rhythmAudio.createOscillator();
-    const gain = rhythmAudio.createGain();
-    oscillator.frequency.value = 740;
-    gain.gain.setValueAtTime(0.13, rhythmAudio.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, rhythmAudio.currentTime + 0.07);
-    oscillator.connect(gain).connect(rhythmAudio.destination);
-    oscillator.start(); oscillator.stop(rhythmAudio.currentTime + 0.075);
-  } catch { /* visual rhythm remains available */ }
+    audioContext = new AudioContext();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    audioContext.createMediaStreamSource(stream).connect(analyser);
+    const samples = new Uint8Array(analyser.fftSize);
+    const update = () => {
+      if (!analyser || !mediaStream) return;
+      analyser.getByteTimeDomainData(samples);
+      let sum = 0;
+      for (const sample of samples) { const normal = (sample - 128) / 128; sum += normal * normal; }
+      const level = Math.min(100, Math.round(Math.sqrt(sum / samples.length) * 260));
+      refs.micMeterFill.style.width = `${Math.max(3, level)}%`;
+      levelFrame = window.requestAnimationFrame(update);
+    };
+    update();
+  } catch { refs.micMeterFill.style.width = "12%"; }
 }
 
-async function installApp() {
-  if (!installPrompt) { showToast(tr('install_unavailable')); return; }
-  const prompt = installPrompt;
-  installPrompt = null;
-  await prompt.prompt();
-  try { await prompt.userChoice; } catch { /* browser-specific */ }
-  render();
+function startResponderSimulation() {
+  const schedule = [
+    [550, "demo-first-aider-1", "DELIVERED", null],
+    [1000, "demo-first-aider-1", "ACKNOWLEDGED", null],
+    [1500, "demo-supervisor-1", "ACKNOWLEDGED", null],
+    [2100, "demo-first-aider-1", "EN_ROUTE", 2],
+    [2700, "demo-gate-1", "ACKNOWLEDGED", null],
+    [3300, "demo-supervisor-1", "EN_ROUTE", 3],
+  ];
+  responderTimers = schedule.map(([delay, id, state, etaMinutes]) => window.setTimeout(() => dispatch({ type: "RESPONDER_UPDATE", id, state, etaMinutes }), delay));
 }
 
-function showToast(message) {
-  toast.textContent = message;
-  toast.hidden = false;
-  if (toastTimer) window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => { toast.hidden = true; }, 3600);
+function startElapsedTimer() { updateElapsed(); elapsedTimer = window.setInterval(updateElapsed, 1000); }
+function updateElapsed() {
+  if (!incident) return;
+  const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(incident.activatedAt)) / 1000));
+  const minutes = Math.floor(seconds / 60); const remainder = seconds % 60;
+  refs.elapsedTime.textContent = `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  refs.elapsedTime.dateTime = `PT${seconds}S`;
 }
 
-app.addEventListener('click', (event) => {
-  const button = event.target.closest('button');
-  if (!button) return;
-  if (button.dataset.call) return callEmergency(button.dataset.call);
-  if (button.hasAttribute('data-emergency')) return startEmergency();
-  if (button.hasAttribute('data-language')) return openLanguageDialog();
-  if (button.hasAttribute('data-sources')) return openSourcesDialog();
-  if (button.hasAttribute('data-cpr-select')) { state = goToCprSelect(state); return render(); }
-  if (button.dataset.cprAge) { state = chooseCprAge(state, button.dataset.cprAge); return render(); }
-  if (button.dataset.scenario) { state = openScenario(state, button.dataset.scenario); return render(); }
-  if (button.hasAttribute('data-picker')) { state = openScenarioPicker(state); return render(); }
-  if (button.hasAttribute('data-symptoms')) { state = openSymptoms(state); return render(); }
-  if (button.dataset.answer) { state = answerTriage(state, Answer[button.dataset.answer]); return render(); }
-  if (button.hasAttribute('data-back')) return goBack();
-  if (button.hasAttribute('data-reset')) return endEmergency();
-  if (button.hasAttribute('data-location')) return openLocationScreen();
-  if (button.hasAttribute('data-location-back')) return returnFromLocation();
-  if (button.hasAttribute('data-get-location')) return requestLocation();
-  if (button.hasAttribute('data-copy-location')) return void copyLocation();
-  if (button.hasAttribute('data-share-location')) return void shareLocation();
-  if (button.hasAttribute('data-route-symptoms')) return routeSymptomsNow();
-  if (button.hasAttribute('data-voice-input')) return startVoiceInput();
-  if (button.hasAttribute('data-read')) return readCurrentGuidance();
-  if (button.hasAttribute('data-rhythm')) return startRhythm();
-  if (button.hasAttribute('data-haptic')) { hapticEnabled = !hapticEnabled; return render(); }
-  if (button.hasAttribute('data-install')) return void installApp();
-});
-
-languageList.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-language-code]');
-  if (button) chooseLanguage(button.dataset.languageCode);
-});
-document.querySelector('[data-close-language]').addEventListener('click', () => closeDialog(languageDialog));
-document.querySelector('[data-close-sources]').addEventListener('click', () => closeDialog(sourcesDialog));
-
-window.addEventListener('beforeinstallprompt', (event) => {
-  event.preventDefault();
-  installPrompt = event;
-  if (state.screen === Screen.HOME) render();
-});
-window.addEventListener('appinstalled', () => { installPrompt = null; showToast(tr('installed')); render(); });
-window.addEventListener('beforeunload', () => { stopSpeech(); stopRhythm(); });
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
+function render() {
+  if (!incident) return;
+  renderStatus(); renderResponderList();
+  if (incident.state === IncidentState.CANCELLED_FALSE_ALARM) return renderCancelled();
+  if (incident.state === IncidentState.ACTIVATED) {
+    refs.decisionPanel.innerHTML = `<div class="activating-view"><p class="eyebrow danger-text">LOCAL EMERGENCY MODE STARTED</p><h2>STARTING HELP FLOW</h2><p>Location, microphone and simulated responder actions are beginning in parallel.</p></div>`;
+    speakOnce("activated", "Emergency mode active. This is a demonstration. Is the area safe to enter?");
+    return;
+  }
+  if (incident.state === IncidentState.ASSESSING) return renderQuestion();
+  if (incident.state === IncidentState.GUIDANCE) return renderGuidance();
+  if (incident.state === IncidentState.HANDOVER_READY) renderHandover();
 }
 
-render();
+function renderStatus() {
+  const summary = getResponderSummary(incident.responders);
+  refs.teamStatusValue.textContent = summary.onScene ? `${summary.onScene} ON SCENE` : summary.enRoute ? `${summary.enRoute} EN ROUTE` : summary.acknowledged ? `${summary.acknowledged} ACKNOWLEDGED` : "ALERTING DEMO";
+  refs.teamStatusDetail.textContent = `${summary.acknowledged} OF ${summary.total} ACK • SIMULATED`;
+  const location = incident.location;
+  if (location.status === "AVAILABLE") {
+    refs.locationStatusValue.textContent = `GPS ±${Math.round(location.accuracyMetres)}M`;
+    refs.locationStatusDetail.textContent = `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} • DEVICE ONLY`;
+  } else if (location.status === "REQUESTING") {
+    refs.locationStatusValue.textContent = "REQUESTING"; refs.locationStatusDetail.textContent = "DEMO SITE • LEEDS";
+  } else {
+    refs.locationStatusValue.textContent = `GPS ${location.status}`; refs.locationStatusDetail.textContent = "FALLBACK • LEVEL 3 • ZONE C";
+  }
+  const microphone = incident.microphone;
+  if (microphone.status === "LOCAL_ACTIVE") { refs.microphoneStatusValue.textContent = "LOCAL MIC ACTIVE"; refs.microphoneStatusDetail.textContent = "NOT SENT • NOT RECORDED"; }
+  else if (microphone.status === "REQUESTING") { refs.microphoneStatusValue.textContent = "REQUESTING"; refs.microphoneStatusDetail.textContent = "LOCAL PERMISSION"; }
+  else { refs.microphoneStatusValue.textContent = `MIC ${microphone.status}`; refs.microphoneStatusDetail.textContent = "FLOW CONTINUES"; refs.micMeterFill.style.width = "0%"; }
+}
+
+function renderQuestion() {
+  const copy = getQuestionCopy(incident.triage.currentQuestion); if (!copy) return;
+  const voiceUnavailable = !SpeechRecognition;
+  refs.decisionPanel.innerHTML = `<div class="question-view"><div class="instruction-copy"><p class="eyebrow">${copy.eyebrow}</p><h2>${copy.title}</h2><p>${copy.detail}</p></div><div class="answer-grid" aria-label="Answer choices"><button class="answer-button answer-yes" type="button" data-answer="YES">YES</button><button class="answer-button answer-no" type="button" data-answer="NO">NO</button><button class="answer-button answer-unknown" type="button" data-answer="UNKNOWN">NOT SURE</button><button class="answer-button answer-voice" type="button" data-voice-answer ${voiceUnavailable ? "disabled" : ""}>${voiceUnavailable ? "VOICE OFF" : recognitionActive ? "LISTENING" : "SPEAK"}<span>${voiceUnavailable ? "NOT SUPPORTED" : "SAY YES, NO OR NOT SURE"}</span></button></div></div>`;
+  refs.decisionPanel.querySelectorAll("[data-answer]").forEach((button) => button.addEventListener("click", () => answer(button.dataset.answer, "touch")));
+  refs.decisionPanel.querySelector("[data-voice-answer]")?.addEventListener("click", startVoiceAnswer);
+  speakOnce(incident.triage.currentQuestion, `${copy.title} ${copy.detail}`);
+}
+
+function renderGuidance() {
+  const guidance = getGuidanceCopy(incident.triage.guidance); if (!guidance) return;
+  refs.decisionPanel.innerHTML = `<div class="guidance-view"><div class="guidance-copy ${guidance.tone}"><p class="eyebrow">${guidance.eyebrow}</p><h2>${guidance.title}</h2><p>${guidance.action}</p><p class="guidance-secondary">${guidance.secondary}</p></div><div class="guidance-actions"><button class="call-action primary-call" type="button" data-call="999">CALL 999<span>OPENS DIALLER</span></button><button class="call-action" type="button" data-call="112">CALL 112<span>OPENS DIALLER</span></button><button class="next-action" type="button" data-handover>HANDOVER<span>SHOW THE PREPARED BRIEF</span></button><button class="next-action" type="button" data-repeat>READ AGAIN<span>VOICE GUIDANCE</span></button></div></div>`;
+  refs.decisionPanel.querySelectorAll("[data-call]").forEach((button) => button.addEventListener("click", () => openDialler(button.dataset.call)));
+  refs.decisionPanel.querySelector("[data-handover]")?.addEventListener("click", () => dispatch({ type: "HANDOVER_READY" }));
+  refs.decisionPanel.querySelector("[data-repeat]")?.addEventListener("click", () => speak(`${guidance.title}. ${guidance.action}. ${guidance.secondary}`));
+  speakOnce(incident.triage.guidance, `${guidance.title}. ${guidance.action}. ${guidance.secondary}`);
+}
+
+function renderHandover() {
+  const answers = incident.triage.answers; const value = (id) => answers[id]?.answer || "NOT ASKED";
+  const location = incident.location.status === "AVAILABLE" ? `GPS ±${Math.round(incident.location.accuracyMetres)}M` : "LEVEL 3 • ZONE C • VERIFY";
+  refs.decisionPanel.innerHTML = `<div class="handover-view"><p class="eyebrow">DEMO OPERATOR BRIEF • CHECK BEFORE SPEAKING</p><h2>HANDOVER READY</h2><div class="handover-grid"><div class="handover-item"><span>LOCATION</span><strong>${location}</strong></div><div class="handover-item"><span>SCENE SAFE</span><strong>${value("scene_safe")}</strong></div><div class="handover-item"><span>RESPONSIVE</span><strong>${value("responsive")}</strong></div><div class="handover-item"><span>BREATHING</span><strong>${value("breathing")}</strong></div><div class="handover-item"><span>SEVERE BLEEDING</span><strong>${value("severe_bleeding")}</strong></div><div class="handover-item"><span>TEAM RESPONSE</span><strong>${getResponderSummary(incident.responders).acknowledged} ACK • DEMO</strong></div></div><p>Read this to the operator. Do not play it automatically. Operator instructions always override the module.</p><div class="guidance-actions"><button class="call-action primary-call" type="button" data-call="999">CALL 999<span>OPENS DIALLER</span></button><button class="call-action" type="button" data-call="112">CALL 112<span>OPENS DIALLER</span></button></div></div>`;
+  refs.decisionPanel.querySelectorAll("[data-call]").forEach((button) => button.addEventListener("click", () => openDialler(button.dataset.call)));
+  speakOnce("handover", "Handover ready. Check the information and read it to the emergency operator.");
+}
+
+function renderCancelled() {
+  refs.cancelButton.hidden = true;
+  refs.decisionPanel.innerHTML = `<div class="cancelled-view"><p class="eyebrow danger-text">FALSE ALARM • LOCAL DEMO ONLY</p><h2>DEMO CANCELLED</h2><p>No real responders were alerted. No external cancellation was sent. Local microphone tracks have been stopped.</p><button class="reset-action" type="button" data-reset>RESET DEMO</button></div>`;
+  refs.decisionPanel.querySelector("[data-reset]")?.addEventListener("click", resetDemo);
+}
+
+function renderResponderList() {
+  refs.responderList.innerHTML = incident.responders.map((responder) => `<div class="responder-row"><div><strong>${responder.syntheticName}</strong><span>${responder.role} • SYNTHETIC</span></div><span class="responder-state">${responder.state}${responder.etaMinutes ? ` • ${responder.etaMinutes} MIN` : ""}</span></div>`).join("");
+}
+
+function answer(rawAnswer, source) { const answerValue = Answer[rawAnswer]; if (!answerValue) return; dispatch({ type: "ANSWER", answer: answerValue, source }); }
+
+function startVoiceAnswer() {
+  if (!SpeechRecognition || recognitionActive) return;
+  recognition = new SpeechRecognition(); recognition.lang = navigator.language || "en-GB"; recognition.interimResults = false; recognition.maxAlternatives = 1; recognition.continuous = false; recognitionActive = true; renderQuestion();
+  recognition.addEventListener("result", (event) => {
+    const words = String(event.results?.[0]?.[0]?.transcript || "").toLowerCase().trim(); recognitionActive = false;
+    const unknownWords = ["not sure", "unknown", "don't know", "do not know", "nie wiem"]; const noWords = ["no", "unsafe", "not safe", "nie"]; const yesWords = ["yes", "safe", "tak"];
+    if (unknownWords.some((phrase) => words.includes(phrase))) answer("UNKNOWN", "voice");
+    else if (noWords.some((phrase) => words === phrase || words.includes(`${phrase} `))) answer("NO", "voice");
+    else if (yesWords.some((phrase) => words === phrase || words.includes(`${phrase} `))) answer("YES", "voice");
+    else { showToast("VOICE ANSWER NOT UNDERSTOOD • USE A LARGE BUTTON"); renderQuestion(); }
+  });
+  recognition.addEventListener("error", () => { recognitionActive = false; showToast("VOICE INPUT UNAVAILABLE • USE A LARGE BUTTON"); renderQuestion(); });
+  recognition.addEventListener("end", () => { if (recognitionActive) { recognitionActive = false; renderQuestion(); } });
+  try { recognition.start(); } catch { recognitionActive = false; showToast("VOICE INPUT UNAVAILABLE • USE A LARGE BUTTON"); renderQuestion(); }
+}
+
+function openDialler(number) { dispatch({ type: "CALL_DIALER_OPENED", number }); showToast(`OPENING ${number} DIALLER • CONNECTION NOT CONFIRMED`); window.location.href = `tel:${number}`; }
+function toggleVoice() { voiceEnabled = !voiceEnabled; refs.voiceToggle.textContent = voiceEnabled ? "VOICE ON" : "VOICE OFF"; refs.voiceToggle.setAttribute("aria-pressed", String(voiceEnabled)); if (!voiceEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel(); if (voiceEnabled) { lastSpokenKey = null; render(); } }
+function speakOnce(key, words) { if (!voiceEnabled || key === lastSpokenKey) return; lastSpokenKey = key; speak(words); }
+function speak(words) { if (!voiceEnabled || !("speechSynthesis" in window)) return; window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(words); utterance.lang = "en-GB"; utterance.rate = 0.92; utterance.pitch = 1; window.speechSynthesis.speak(utterance); }
+
+function cancelDemo() { cleanupLiveResources(); dispatch({ type: "CANCEL" }); if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); }
+function resetDemo() { cleanupLiveResources(); incident = null; lastSpokenKey = null; refs.cancelButton.hidden = false; refs.emergencyScreen.hidden = true; refs.startScreen.hidden = false; refs.elapsedTime.textContent = "00:00"; refs.micMeterFill.style.width = "0%"; document.body.classList.remove("emergency-active"); refs.activateButton.focus(); }
+
+function cleanupLiveResources() {
+  responderTimers.forEach((timer) => window.clearTimeout(timer)); responderTimers = [];
+  if (elapsedTimer) window.clearInterval(elapsedTimer); elapsedTimer = null;
+  if (levelFrame) window.cancelAnimationFrame(levelFrame); levelFrame = null;
+  mediaStream?.getTracks().forEach((track) => track.stop()); mediaStream = null;
+  analyser?.disconnect(); analyser = null; audioContext?.close().catch(() => {}); audioContext = null;
+  recognition?.abort(); recognition = null; recognitionActive = false;
+  if (wakeLock) wakeLock.release().catch(() => {}); wakeLock = null;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
+function showToast(message) { refs.toast.textContent = message; refs.toast.hidden = false; if (toastTimer) window.clearTimeout(toastTimer); toastTimer = window.setTimeout(() => { refs.toast.hidden = true; }, 3200); }
+function openResponders() { renderResponderList(); if (typeof refs.responderDialog.showModal === "function") refs.responderDialog.showModal(); else refs.responderDialog.setAttribute("open", ""); }
+function closeResponders() { if (typeof refs.responderDialog.close === "function") refs.responderDialog.close(); else refs.responderDialog.removeAttribute("open"); }
+
+refs.activateButton.addEventListener("click", activateDemo);
+refs.voiceToggle.addEventListener("click", toggleVoice);
+refs.cancelButton.addEventListener("click", cancelDemo);
+refs.teamStatus.addEventListener("click", openResponders);
+refs.closeResponderDialog.addEventListener("click", closeResponders);
+refs.acknowledgeDemo.addEventListener("click", () => { dispatch({ type: "RESPONDER_UPDATE", id: "demo-first-aider-1", state: "EN_ROUTE", etaMinutes: 2 }); showToast("SIMULATED FIRST AIDER EN ROUTE • 2 MIN"); closeResponders(); });
+refs.unavailableDemo.addEventListener("click", () => { dispatch({ type: "RESPONDER_UPDATE", id: "demo-first-aider-1", state: "UNAVAILABLE" }); showToast("SIMULATED RESPONDER UNAVAILABLE • ESCALATION WOULD CONTINUE"); closeResponders(); });
+refs.joinAudioDemo.addEventListener("click", () => showToast("LIVE AUDIO NEEDS THE FUTURE SECURE BACKEND • NOT CONNECTED"));
+
+window.addEventListener("beforeunload", cleanupLiveResources);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && incident && !wakeLock) requestWakeLock(); });
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js").catch(() => {}));
