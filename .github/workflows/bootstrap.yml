@@ -1,0 +1,61 @@
+name: Bootstrap NOSMO Emergency Button
+
+on:
+  push:
+    paths:
+      - '.bootstrap/**'
+      - '.github/workflows/bootstrap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  unpack-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Rebuild and verify exact release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/part-*.b64 > /tmp/nosmo-emergency.b64
+          base64 -d /tmp/nosmo-emergency.b64 > /tmp/nosmo-emergency.zip
+          echo "48963256b36716724619fcba65b94ea5aef4edd8f4d68d5a95fa2402d12b564b  /tmp/nosmo-emergency.zip" | sha256sum -c -
+          mkdir -p /tmp/nosmo-emergency
+          unzip -q /tmp/nosmo-emergency.zip -d /tmp/nosmo-emergency
+          test -f /tmp/nosmo-emergency/nosmo-emergency-v1/VERSION
+          test "$(cat /tmp/nosmo-emergency/nosmo-emergency-v1/VERSION)" = "V1.0001"
+
+      - name: Install exact standalone release
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s dotglob nullglob
+          cp -a /tmp/nosmo-emergency/nosmo-emergency-v1/* .
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap.yml
+
+      - name: Run V1 acceptance suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test
+          npm run check
+
+      - name: Commit verified V1.0001 RC
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Release NOSMO Emergency Button V1.0001 RC"
+          git push
