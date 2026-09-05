@@ -23,6 +23,12 @@ export const Scenario = Object.freeze({
   CHOKING: 'choking',
   STROKE: 'stroke',
   ANAPHYLAXIS: 'anaphylaxis',
+  FALL_HEAD_SPINE: 'fall_head_spine',
+  CRUSH_INJURY: 'crush_injury',
+  ELECTRICAL_INJURY: 'electrical_injury',
+  THERMAL_BURN: 'thermal_burn',
+  CHEMICAL_BURN: 'chemical_burn',
+  AMPUTATION: 'amputation',
   OPERATOR: 'operator',
 });
 
@@ -55,6 +61,30 @@ const copy = {
     anaphylaxis: {
       eyebrow:'SEVERE ALLERGIC REACTION', title:'ADRENALINE. CALL 999.', tone:'danger', call:true,
       steps:['Use their adrenaline auto-injector immediately if available, following the device instructions.', 'Call 999 and say you suspect anaphylaxis.', 'Lie them down. If breathing is very difficult, they may sit up slowly; do not let them stand or walk. If pregnant, lie on the left side.', 'If symptoms have not improved after 5 minutes and a second auto-injector is available, use it.'],
+    },
+    fall_head_spine: {
+      eyebrow:'FALL / HEAD / SPINE TRAUMA', title:'KEEP STILL. CALL 999.', tone:'danger', call:true,
+      steps:['For a fall from height, serious head impact, new weakness or numbness, confusion, seizure, or suspected neck/spine injury, call 999.', 'Do not move the person unless there is immediate danger or their airway or breathing requires it. If awake, encourage them to keep their head and neck in a comfortable, stable position.', 'Check breathing continuously. If normal breathing stops, start CPR; opening the airway takes priority over keeping the neck still. Follow the 999 operator.', 'Control any life-threatening bleeding without unnecessary movement.'],
+    },
+    crush_injury: {
+      eyebrow:'CRUSH / ENTRAPMENT', title:'ISOLATE HAZARD. CALL 999.', tone:'danger', call:true,
+      steps:['Make sure machinery, loads and moving equipment are isolated before approaching. Do not enter under an unstable load.', 'Call 999 for a serious crush injury or entrapment.', 'Do not attempt a dangerous release of a trapped person. Follow the emergency operator and site rescue instructions.', 'When it is safe to reach them, minimise neck and spine movement, check response and breathing, and start CPR if they are not breathing normally.', 'Control life-threatening bleeding with direct pressure and a tourniquet for severe arm or leg bleeding if needed.'],
+    },
+    electrical_injury: {
+      eyebrow:'ELECTRICAL INJURY', title:'POWER OFF. CALL 999.', tone:'danger', call:true,
+      steps:['Do not touch the casualty while they are still in contact with electricity. Isolate the supply or use the emergency stop if it is safe to do so.', 'For high voltage, or if you cannot confirm the supply is isolated, keep clear and call 999/112 and the site electrical rescue or competent person.', 'Once the electrical source is confirmed isolated, check response and breathing. Start CPR and use an AED if they are not breathing normally.', 'After immediate life threats are managed, cool visible burns with cool or lukewarm running water for 20 minutes. Do not use ice or creams.'],
+    },
+    thermal_burn: {
+      eyebrow:'SERIOUS BURN', title:'COOL 20 MINUTES.', tone:'danger', call:true,
+      steps:['Stop the burning process and move away from the heat source if it is safe.', 'Cool the burn under cool or lukewarm running water for 20 minutes as soon as possible.', 'Remove clothing or jewellery near the burn, but do not remove anything stuck to the skin.', 'After cooling, lay cling film loosely over the burn if available. Do not wrap it around a limb. Do not use ice, creams, oils or butter.', 'Call 999 for a large or deep burn, burns to the face or genitals, breathing difficulty, or a major fire injury.'],
+    },
+    chemical_burn: {
+      eyebrow:'CHEMICAL BURN', title:'CALL 999. FLUSH WITH WATER.', tone:'danger', call:true,
+      steps:['Call 999 for an acid or chemical burn to the skin or eyes.', 'Protect yourself with suitable gloves or PPE. Remove contaminated clothing if it is safe and carefully brush dry chemicals off the skin.', 'Flush the affected area with lots of cool or lukewarm running water for about 1 hour.', 'Do not apply creams or try to neutralise the chemical with another chemical.', 'Tell the operator what chemical was involved. Keep the product label or safety information available if this can be done safely.'],
+    },
+    amputation: {
+      eyebrow:'AMPUTATION / SEVERED PART', title:'CONTROL BLEEDING. CALL 999.', tone:'danger', call:true,
+      steps:['Call 999 and control life-threatening bleeding first with firm direct pressure.', 'For life-threatening arm or leg bleeding not controlled by pressure, apply a commercial tourniquet 5–7 cm above the wound, not over a joint. Tighten until bleeding stops, note the time, and do not release it.', 'Retrieve the amputated part once the scene is safe. Wrap it in a sterile dressing or clean cloth moistened with saline or water.', 'Place the wrapped part in a clean watertight bag or container, then place that inside another bag with ice or ice water. Do not let the body part touch ice directly and do not freeze it.', 'Keep the part with the injured person and send it to the same hospital. Label the container with the person’s name and storage time if possible.'],
     },
     operator: {
       eyebrow:'NOT SURE WHAT IS HAPPENING', title:'CALL 999 / 112 FOR GUIDANCE', tone:'ready', call:true,
@@ -118,7 +148,12 @@ export function reduceIncident(incident, action, now = new Date().toISOString())
     case 'ANSWER': return answerQuestion(incident, action.answer, now);
     case 'SELECT_SCENARIO': {
       const scenario = action.scenario;
-      if (![Scenario.CPR,Scenario.SEVERE_BLEEDING,Scenario.CHOKING,Scenario.STROKE,Scenario.ANAPHYLAXIS,Scenario.OPERATOR].includes(scenario)) return incident;
+      const allowed = [
+        Scenario.CPR, Scenario.SEVERE_BLEEDING, Scenario.CHOKING, Scenario.STROKE, Scenario.ANAPHYLAXIS,
+        Scenario.FALL_HEAD_SPINE, Scenario.CRUSH_INJURY, Scenario.ELECTRICAL_INJURY, Scenario.THERMAL_BURN,
+        Scenario.CHEMICAL_BURN, Scenario.AMPUTATION, Scenario.OPERATOR,
+      ];
+      if (!allowed.includes(scenario)) return incident;
       if (scenario === Scenario.CPR || scenario === Scenario.CHOKING) return guidance(incident, scenario, AgeGroup.ADULT, now);
       return guidance(incident, scenario, null, now);
     }

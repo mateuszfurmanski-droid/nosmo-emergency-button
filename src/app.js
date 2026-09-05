@@ -1,4 +1,4 @@
-import { AgeGroup, Answer, IncidentState, Scenario, createIncident, getQuestionCopy, getScenarioCopy, reduceIncident } from './emergency-state.js';
+import { Answer, IncidentState, Scenario, createIncident, getQuestionCopy, getScenarioCopy, reduceIncident } from './emergency-state.js';
 
 const refs = {
   startScreen: document.querySelector('#startScreen'), emergencyScreen: document.querySelector('#emergencyScreen'),
@@ -41,7 +41,6 @@ function render(){
   if(incident.state!==IncidentState.GUIDANCE && rhythmActive) stopRhythm(false);
   if(incident.state===IncidentState.ASSESSING) renderQuestion();
   else if(incident.state===IncidentState.SCENARIO_PICKER) renderScenarioPicker();
-  else if(incident.state===IncidentState.AGE_SELECT) renderAgePicker();
   else if(incident.state===IncidentState.GUIDANCE) renderGuidance();
   else if(incident.state===IncidentState.CANCELLED) renderCancelled();
 }
@@ -55,23 +54,24 @@ function renderQuestion(){
 }
 
 const scenarioChoices=[
-  [Scenario.CPR,'CPR','NOT BREATHING','danger'],[Scenario.CHOKING,'CHOKING','AIRWAY BLOCKED','airway'],
-  [Scenario.STROKE,'STROKE','FAST','stroke'],[Scenario.ANAPHYLAXIS,'ANAPHYLAXIS','SEVERE ALLERGY','allergy'],
-  [Scenario.SEVERE_BLEEDING,'SEVERE BLEEDING','PRESS HARD','bleeding'],[Scenario.OPERATOR,'NOT SURE','CALL OPERATOR','operator'],
+  [Scenario.CPR,'CPR','NOT BREATHING','danger'],
+  [Scenario.CHOKING,'CHOKING','AIRWAY BLOCKED','airway'],
+  [Scenario.SEVERE_BLEEDING,'SEVERE BLEEDING','PRESS HARD','bleeding'],
+  [Scenario.FALL_HEAD_SPINE,'FALL / HEAD / SPINE','KEEP STILL','trauma'],
+  [Scenario.CRUSH_INJURY,'CRUSH / ENTRAPMENT','ISOLATE HAZARD','trauma'],
+  [Scenario.ELECTRICAL_INJURY,'ELECTRICAL','POWER OFF FIRST','electrical'],
+  [Scenario.THERMAL_BURN,'SERIOUS BURN','COOL 20 MIN','burn'],
+  [Scenario.CHEMICAL_BURN,'CHEMICAL BURN','FLUSH WITH WATER','chemical'],
+  [Scenario.AMPUTATION,'AMPUTATION','CONTROL BLEEDING','bleeding'],
+  [Scenario.STROKE,'STROKE','FAST','stroke'],
+  [Scenario.ANAPHYLAXIS,'ANAPHYLAXIS','SEVERE ALLERGY','allergy'],
+  [Scenario.OPERATOR,'NOT SURE','CALL OPERATOR','operator'],
 ];
 function renderScenarioPicker(){
   const buttons=scenarioChoices.map(([id,title,small,cls])=>`<button class="scenario-choice ${cls}" data-scenario="${id}">${title}<small>${small}</small></button>`).join('');
-  refs.decisionPanel.innerHTML=`<div class="scenario-picker"><div class="scenario-copy"><p class="eyebrow">QUICK EMERGENCY ROUTING</p><h2>WHAT IS HAPPENING?</h2><p>Choose the closest match. If unsure, use NOT SURE and call 999 / 112.</p></div><div class="scenario-choice-grid">${buttons}</div></div>`;
+  refs.decisionPanel.innerHTML=`<div class="scenario-picker"><div class="scenario-copy"><p class="eyebrow">QUICK EMERGENCY ROUTING</p><h2>WHAT IS HAPPENING?</h2><p>Choose the closest match. Construction trauma options are included. If unsure, use NOT SURE and call 999 / 112.</p></div><div class="scenario-choice-grid">${buttons}</div></div>`;
   refs.decisionPanel.querySelectorAll('[data-scenario]').forEach((b)=>b.addEventListener('click',()=>dispatch({type:'SELECT_SCENARIO',scenario:b.dataset.scenario})));
-  speakOnce('scenario-picker','What is happening? Choose CPR, choking, stroke, anaphylaxis, severe bleeding, or not sure.');
-}
-
-function renderAgePicker(){
-  const isCpr=incident.scenario===Scenario.CPR;
-  refs.decisionPanel.innerHTML=`<div class="age-picker"><div class="age-copy"><p class="eyebrow">${isCpr?'CPR':'CHOKING'} — AGE</p><h2>WHO NEEDS HELP?</h2><p>Choose the age group so the physical technique is correct.</p></div><div class="age-choice-grid"><button class="age-choice adult" data-age="adult">ADULT<small>ADULT / ADOLESCENT</small></button><button class="age-choice child" data-age="child">CHILD<small>1–18 YEARS</small></button><button class="age-choice infant" data-age="infant">BABY<small>UNDER 1 YEAR</small></button><button class="age-choice back" data-back-scenarios>BACK<small>CHOOSE ANOTHER EMERGENCY</small></button></div></div>`;
-  refs.decisionPanel.querySelectorAll('[data-age]').forEach((b)=>b.addEventListener('click',()=>dispatch({type:'SELECT_AGE',ageGroup:b.dataset.age})));
-  refs.decisionPanel.querySelector('[data-back-scenarios]')?.addEventListener('click',()=>dispatch({type:'BACK_TO_SCENARIOS'}));
-  speakOnce(`age:${incident.scenario}`,'Choose adult, child, or baby.');
+  speakOnce('scenario-picker','What is happening? Choose the closest emergency. If you are not sure, call 999 or 112.');
 }
 
 function renderGuidance(){
