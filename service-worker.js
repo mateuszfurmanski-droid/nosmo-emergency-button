@@ -1,7 +1,7 @@
-const CACHE_NAME = 'nosmo-emergency-core-v1-0004-20260905';
+const CACHE_NAME = 'nosmo-emergency-core-v1-0005-20260905';
 const STATIC_ASSETS = [
-  './','./index.html','./styles.css','./engine.css','./app.webmanifest',
-  './src/app.js','./src/emergency-state.js','./icons/icon-192.png','./icons/icon-512.png'
+  './','./index.html','./styles.css','./engine.css','./site-medical.css','./app.webmanifest',
+  './src/app.js','./src/emergency-state.js','./src/site-medical-ui.js','./icons/icon-192.png','./icons/icon-512.png'
 ];
 self.addEventListener('install',(event)=>{event.waitUntil(caches.open(CACHE_NAME).then((cache)=>cache.addAll(STATIC_ASSETS)));self.skipWaiting();});
 self.addEventListener('activate',(event)=>{event.waitUntil(caches.keys().then((keys)=>Promise.all(keys.filter((key)=>key.startsWith('nosmo-emergency')&&key!==CACHE_NAME).map((key)=>caches.delete(key)))).then(()=>self.clients.claim()));});
