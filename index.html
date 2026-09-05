@@ -1,44 +1,108 @@
 <!doctype html>
-<html lang="en-GB" dir="ltr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=yes">
-  <meta name="theme-color" content="#b60d18">
-  <meta name="color-scheme" content="dark light">
-  <meta name="description" content="NOSMO Emergency Button — offline-capable UK first-aid guidance with prominent 999 and 112 actions.">
-  <meta name="application-name" content="NOSMO Emergency Button">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Emergency">
-  <link rel="manifest" href="app.webmanifest">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="styles.css">
-  <title>NOSMO Emergency Button</title>
-</head>
-<body>
-  <div id="app" class="app-shell" aria-live="polite"></div>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#d20d18" />
+    <meta name="description" content="Standalone NOSMO Emergency Core interaction demonstrator." />
+    <link rel="manifest" href="app.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>NOSMO Emergency Core — Demo</title>
+  </head>
+  <body>
+    <main id="startScreen" class="start-screen">
+      <header class="start-header">
+        <div class="wordmark" aria-label="NOSMO">NOSMO</div>
+        <div class="module-name">EMERGENCY CORE</div>
+        <div class="demo-chip">STANDALONE DEMO</div>
+      </header>
 
-  <dialog id="languageDialog" class="sheet-dialog" aria-labelledby="languageDialogTitle">
-    <div class="sheet-head">
-      <h2 id="languageDialogTitle">Language</h2>
-      <button class="icon-button" type="button" data-close-language aria-label="Close language selector">×</button>
-    </div>
-    <div id="languageList" class="language-list"></div>
-  </dialog>
+      <section class="activation-zone" aria-labelledby="startTitle">
+        <div class="activation-copy">
+          <p class="eyebrow">ONE PRESS • IMMEDIATE FULL-SCREEN MODE</p>
+          <h1 id="startTitle">PRESS ONLY TO START THE DEMO</h1>
+          <p>This does not alert staff or call emergency services.</p>
+        </div>
+        <button id="activateButton" class="activate-button" type="button" aria-describedby="activationTruth">
+          <span class="sos-label">SOS</span>
+          <span class="emergency-label">EMERGENCY</span>
+          <span class="press-label">PRESS ONCE</span>
+        </button>
+        <p id="activationTruth" class="activation-truth">
+          Local device demonstration. Location and microphone permissions are optional.
+        </p>
+      </section>
+    </main>
 
-  <dialog id="sourcesDialog" class="sheet-dialog" aria-labelledby="sourcesDialogTitle">
-    <div class="sheet-head">
-      <h2 id="sourcesDialogTitle">Safety & sources</h2>
-      <button class="icon-button" type="button" data-close-sources aria-label="Close safety and sources">×</button>
-    </div>
-    <div id="sourcesContent" class="sources-content"></div>
-  </dialog>
+    <section id="emergencyScreen" class="emergency-shell" aria-live="polite" hidden>
+      <div class="demo-banner" role="status">
+        DEMO • NO REAL ALERTS SENT • NO AUDIO TRANSMISSION
+      </div>
 
-  <div id="toast" class="toast" role="status" aria-live="assertive" hidden></div>
-  <noscript>
-    <div class="noscript">JavaScript is required for the emergency guidance flow. In an emergency call 999 or 112.</div>
-  </noscript>
-  <script type="module" src="src/app.js"></script>
-</body>
+      <header class="emergency-header">
+        <div>
+          <p class="active-kicker">EMERGENCY MODE</p>
+          <h1>ACTIVE</h1>
+        </div>
+        <time id="elapsedTime" class="elapsed" datetime="PT0S">00:00</time>
+        <button id="voiceToggle" class="voice-toggle" type="button" aria-pressed="true">
+          VOICE ON
+        </button>
+      </header>
+
+      <div class="status-grid" aria-label="Emergency status">
+        <button id="teamStatus" class="status-card" type="button" aria-haspopup="dialog">
+          <span class="status-label">TEAM</span>
+          <strong id="teamStatusValue">ALERTING DEMO</strong>
+          <span id="teamStatusDetail">0 OF 3 ACK</span>
+        </button>
+        <div id="locationStatus" class="status-card" role="status">
+          <span class="status-label">LOCATION</span>
+          <strong id="locationStatusValue">REQUESTING</strong>
+          <span id="locationStatusDetail">DEMO SITE • LEEDS</span>
+        </div>
+        <div id="microphoneStatus" class="status-card" role="status">
+          <span class="status-label">MICROPHONE</span>
+          <strong id="microphoneStatusValue">REQUESTING</strong>
+          <span id="microphoneStatusDetail">LOCAL ONLY</span>
+          <span class="mic-meter" aria-hidden="true"><span id="micMeterFill"></span></span>
+        </div>
+      </div>
+
+      <section id="decisionPanel" class="decision-panel" aria-live="assertive"></section>
+
+      <button id="cancelButton" class="cancel-button" type="button">
+        FALSE ALARM / CANCEL DEMO
+      </button>
+
+      <dialog id="responderDialog" class="responder-dialog" aria-labelledby="responderTitle">
+        <div class="dialog-banner">RESPONDER VIEW • SIMULATION</div>
+        <div class="responder-dialog-body">
+          <p class="eyebrow danger-text">INCOMING EMERGENCY</p>
+          <h2 id="responderTitle">DEMO SITE • LEEDS</h2>
+          <p class="responder-location">LEVEL 3 • ZONE C • LOCATION UPDATING</p>
+          <div id="responderList" class="responder-list"></div>
+          <div class="responder-actions">
+            <button id="acknowledgeDemo" class="huge-action go-action" type="button">
+              ACKNOWLEDGE<br />&amp; GO
+            </button>
+            <button id="unavailableDemo" class="huge-action unavailable-action" type="button">
+              UNAVAILABLE
+            </button>
+          </div>
+          <button id="joinAudioDemo" class="audio-demo-action" type="button">
+            JOIN LIVE AUDIO<br /><span>BACKEND NOT CONNECTED</span>
+          </button>
+          <button id="closeResponderDialog" class="dialog-close" type="button">
+            BACK TO HELPER
+          </button>
+        </div>
+      </dialog>
+
+      <div id="toast" class="toast" role="status" aria-live="assertive" hidden></div>
+    </section>
+
+    <noscript>This demonstrator requires JavaScript.</noscript>
+    <script type="module" src="src/app.js"></script>
+  </body>
 </html>
