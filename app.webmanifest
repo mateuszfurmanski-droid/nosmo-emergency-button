@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "NOSMO Emergency Button",
+  "short_name": "Emergency",
+  "description": "Offline-capable emergency first-aid guidance for the UK with prominent 999 and 112 actions.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#090b0e",
+  "theme_color": "#b60d18",
+  "lang": "en-GB",
+  "categories": ["medical", "utilities"],
+  "icons": [
+    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}

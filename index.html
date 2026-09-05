@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en-GB" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=yes">
+  <meta name="theme-color" content="#b60d18">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="NOSMO Emergency Button — offline-capable UK first-aid guidance with prominent 999 and 112 actions.">
+  <meta name="application-name" content="NOSMO Emergency Button">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Emergency">
+  <link rel="manifest" href="app.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>NOSMO Emergency Button</title>
+</head>
+<body>
+  <div id="app" class="app-shell" aria-live="polite"></div>
+
+  <dialog id="languageDialog" class="sheet-dialog" aria-labelledby="languageDialogTitle">
+    <div class="sheet-head">
+      <h2 id="languageDialogTitle">Language</h2>
+      <button class="icon-button" type="button" data-close-language aria-label="Close language selector">×</button>
+    </div>
+    <div id="languageList" class="language-list"></div>
+  </dialog>
+
+  <dialog id="sourcesDialog" class="sheet-dialog" aria-labelledby="sourcesDialogTitle">
+    <div class="sheet-head">
+      <h2 id="sourcesDialogTitle">Safety & sources</h2>
+      <button class="icon-button" type="button" data-close-sources aria-label="Close safety and sources">×</button>
+    </div>
+    <div id="sourcesContent" class="sources-content"></div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="assertive" hidden></div>
+  <noscript>
+    <div class="noscript">JavaScript is required for the emergency guidance flow. In an emergency call 999 or 112.</div>
+  </noscript>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
