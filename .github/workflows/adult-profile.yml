@@ -1,0 +1,71 @@
+name: Apply construction adult profile
+
+on:
+  push:
+    branches: [v1.0003-construction-adult-profile]
+    paths: ['.github/workflows/adult-profile.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v1.0003-construction-adult-profile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Apply adult-only construction routing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/emergency-state.js')
+          s = p.read_text()
+          old = "if (scenario === Scenario.CPR || scenario === Scenario.CHOKING) return { ...incident, state:IncidentState.AGE_SELECT, scenario, ageGroup:null, updatedAt:now };"
+          new = "if (scenario === Scenario.CPR || scenario === Scenario.CHOKING) return guidance(incident, scenario, AgeGroup.ADULT, now);"
+          assert old in s
+          s = s.replace(old, new)
+          old = "return { ...incident, answers, state:IncidentState.AGE_SELECT, currentQuestion:null, scenario:Scenario.CPR, ageGroup:null, updatedAt:now };"
+          new = "return guidance({ ...incident, answers }, Scenario.CPR, AgeGroup.ADULT, now);"
+          assert old in s
+          s = s.replace(old, new)
+          p.write_text(s)
+
+          p = Path('tests/emergency-v1.test.js')
+          lines = p.read_text().splitlines()
+          out = []
+          for line in lines:
+              if line.startswith("test('unresponsive and not breathing routes to CPR age selection'"):
+                  out.append("test('unresponsive and not breathing routes directly to adult CPR on construction profile',()=>{const s=answerFlow(Answer.YES,Answer.NO,Answer.NO);assert.equal(s.state,IncidentState.GUIDANCE);assert.equal(s.scenario,Scenario.CPR);assert.equal(s.ageGroup,AgeGroup.ADULT);});")
+              elif line.startswith("test('CPR requires age and has distinct adult child infant protocols'"):
+                  out.append("test('construction profile routes CPR directly to adult while paediatric data remains hidden fallback',()=>{let s=answerFlow(Answer.YES,Answer.YES,Answer.NO);s=reduceIncident(s,{type:'SELECT_SCENARIO',scenario:Scenario.CPR});assert.equal(s.state,IncidentState.GUIDANCE);assert.equal(s.ageGroup,AgeGroup.ADULT);assert.match(getScenarioCopy(Scenario.CPR,AgeGroup.ADULT).steps.join(' '),/5–6 cm/);assert.ok(getScenarioCopy(Scenario.CPR,AgeGroup.CHILD));assert.ok(getScenarioCopy(Scenario.CPR,AgeGroup.INFANT));});")
+              elif line.startswith("test('choking has adult child and infant-specific technique'"):
+                  out.append("test('construction profile routes choking directly to adult while paediatric data remains hidden fallback',()=>{let s=answerFlow(Answer.YES,Answer.YES,Answer.NO);s=reduceIncident(s,{type:'SELECT_SCENARIO',scenario:Scenario.CHOKING});assert.equal(s.state,IncidentState.GUIDANCE);assert.equal(s.ageGroup,AgeGroup.ADULT);assert.match(getScenarioCopy(Scenario.CHOKING,AgeGroup.ADULT).steps.join(' '),/abdominal thrusts/i);assert.ok(getScenarioCopy(Scenario.CHOKING,AgeGroup.CHILD));assert.ok(getScenarioCopy(Scenario.CHOKING,AgeGroup.INFANT));});")
+              else:
+                  out.append(line)
+          p.write_text('\n'.join(out) + '\n')
+
+          Path('VERSION').write_text('V1.0003\n')
+
+          p = Path('service-worker.js')
+          s = p.read_text()
+          assert 'v1-0002-20260905' in s
+          p.write_text(s.replace('v1-0002-20260905', 'v1-0003-20260905'))
+          PY
+      - name: Test
+        run: npm test && npm run check
+      - name: Commit adult profile
+        shell: bash
+        run: |
+          rm .github/workflows/adult-profile.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: construction adult emergency profile V1.0003"
+          git push origin v1.0003-construction-adult-profile
