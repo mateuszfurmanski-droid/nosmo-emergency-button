@@ -119,7 +119,7 @@ export function reduceIncident(incident, action, now = new Date().toISOString())
     case 'SELECT_SCENARIO': {
       const scenario = action.scenario;
       if (![Scenario.CPR,Scenario.SEVERE_BLEEDING,Scenario.CHOKING,Scenario.STROKE,Scenario.ANAPHYLAXIS,Scenario.OPERATOR].includes(scenario)) return incident;
-      if (scenario === Scenario.CPR || scenario === Scenario.CHOKING) return { ...incident, state:IncidentState.AGE_SELECT, scenario, ageGroup:null, updatedAt:now };
+      if (scenario === Scenario.CPR || scenario === Scenario.CHOKING) return guidance(incident, scenario, AgeGroup.ADULT, now);
       return guidance(incident, scenario, null, now);
     }
     case 'SELECT_AGE': {
@@ -152,7 +152,7 @@ function answerQuestion(incident, answer, now) {
   }
   if (question === Question.BREATHING) {
     if (answer === Answer.YES) return guidance({ ...incident, answers }, Scenario.UNCONSCIOUS_BREATHING, null, now);
-    return { ...incident, answers, state:IncidentState.AGE_SELECT, currentQuestion:null, scenario:Scenario.CPR, ageGroup:null, updatedAt:now };
+    return guidance({ ...incident, answers }, Scenario.CPR, AgeGroup.ADULT, now);
   }
   if (question === Question.SEVERE_BLEEDING) {
     if (answer === Answer.YES) return guidance({ ...incident, answers }, Scenario.SEVERE_BLEEDING, null, now);
