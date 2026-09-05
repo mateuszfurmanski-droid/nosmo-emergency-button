@@ -1,0 +1,17 @@
+/* V1.0005 site medical pack. Keeps the original Emergency Core visual system intact. */
+.scenario-choice.chest{background:#6f0e16}
+.scenario-choice.fracture{background:#3d4652}
+.scenario-choice.eye{background:#225b75}
+.scenario-choice.heat{background:#a64d00}
+.scenario-choice.cold{background:#24506f}
+.scenario-choice.seizure{background:#5b3b82}
+.scenario-choice.diabetic{background:#356b4f}
+.site-medical-dialog{width:min(920px,100vw);max-width:100vw;height:min(980px,100dvh);max-height:100dvh;margin:auto;padding:0;border:0;background:var(--architect-white);color:var(--midnight-black)}
+.site-medical-dialog::backdrop{background:rgba(0,0,0,.9)}
+.site-medical-body{height:calc(100% - 42px);display:grid;grid-template-rows:minmax(0,1fr) auto;overflow:hidden}
+.site-medical-body .guidance-copy{padding:clamp(18px,4vw,46px);display:grid;align-content:start;gap:12px;overflow:auto}
+.site-medical-body .guidance-copy h2{margin:0;font-size:clamp(2rem,7vw,5.2rem);line-height:.94;letter-spacing:-.045em}
+.site-medical-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:3px;background:var(--midnight-black)}
+.site-medical-actions .call-action,.site-medical-actions .next-action{min-height:clamp(96px,16dvh,150px)}
+@media(max-width:560px){.site-medical-body .guidance-copy{padding:16px 14px}.site-medical-actions{grid-template-columns:repeat(2,1fr)}}
+@media(max-height:690px){.site-medical-body .guidance-copy{padding:12px}.site-medical-actions .call-action,.site-medical-actions .next-action{min-height:84px}}
