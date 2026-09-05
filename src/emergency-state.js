@@ -1,145 +1,170 @@
 export const IncidentState = Object.freeze({
-  IDLE: "IDLE",
-  ACTIVATED: "ACTIVATED",
-  ASSESSING: "ASSESSING",
-  GUIDANCE: "GUIDANCE",
-  HANDOVER_READY: "HANDOVER_READY",
-  CANCELLED_FALSE_ALARM: "CANCELLED_FALSE_ALARM",
+  ASSESSING: 'ASSESSING',
+  SCENARIO_PICKER: 'SCENARIO_PICKER',
+  AGE_SELECT: 'AGE_SELECT',
+  GUIDANCE: 'GUIDANCE',
+  CANCELLED: 'CANCELLED',
 });
 
-export const Answer = Object.freeze({
-  YES: "YES",
-  NO: "NO",
-  UNKNOWN: "UNKNOWN",
-});
+export const Answer = Object.freeze({ YES: 'YES', NO: 'NO', UNKNOWN: 'UNKNOWN' });
 
 export const Question = Object.freeze({
-  SCENE_SAFE: "scene_safe",
-  RESPONSIVE: "responsive",
-  BREATHING: "breathing",
-  SEVERE_BLEEDING: "severe_bleeding",
+  SCENE_SAFE: 'scene_safe',
+  RESPONSIVE: 'responsive',
+  BREATHING: 'breathing',
+  SEVERE_BLEEDING: 'severe_bleeding',
 });
 
-export const Guidance = Object.freeze({
-  SCENE_UNSAFE: "scene_unsafe",
-  CPR: "cpr",
-  SEVERE_BLEEDING: "severe_bleeding",
-  OPERATOR_BRIEF: "operator_brief",
+export const Scenario = Object.freeze({
+  SCENE_UNSAFE: 'scene_unsafe',
+  UNCONSCIOUS_BREATHING: 'unconscious_breathing',
+  CPR: 'cpr',
+  SEVERE_BLEEDING: 'severe_bleeding',
+  CHOKING: 'choking',
+  STROKE: 'stroke',
+  ANAPHYLAXIS: 'anaphylaxis',
+  OPERATOR: 'operator',
 });
 
-export const demoResponders = Object.freeze([
-  Object.freeze({ id: "demo-first-aider-1", syntheticName: "SAM LEE", role: "FIRST AIDER", state: "ALERTING", etaMinutes: null, synthetic: true }),
-  Object.freeze({ id: "demo-supervisor-1", syntheticName: "ALEX CARTER", role: "SUPERVISOR", state: "ALERTING", etaMinutes: null, synthetic: true }),
-  Object.freeze({ id: "demo-gate-1", syntheticName: "JORDAN KIM", role: "GATE / SECURITY", state: "ALERTING", etaMinutes: null, synthetic: true }),
-]);
+export const AgeGroup = Object.freeze({ ADULT: 'adult', CHILD: 'child', INFANT: 'infant' });
 
-function event(type, label, occurredAt, capability = "LOCAL", status = "CONFIRMED") {
-  return { id: `${type}-${occurredAt}-${label}`, type, label, occurredAt, capability, status };
-}
+const copy = {
+  questions: {
+    [Question.SCENE_SAFE]: { eyebrow:'STEP 1 — SCENE SAFETY', title:'IS THE AREA SAFE TO ENTER?', detail:'Check for traffic, electricity, fire, smoke, gas, chemicals or moving machinery.' },
+    [Question.RESPONSIVE]: { eyebrow:'STEP 2 — RESPONSE', title:'IS THE PERSON RESPONDING?', detail:'Speak loudly and ask them to open their eyes. Do not shake an injured person.' },
+    [Question.BREATHING]: { eyebrow:'STEP 3 — BREATHING', title:'ARE THEY BREATHING NORMALLY?', detail:'Look and listen for normal breathing. Gasping or irregular breaths are not normal.' },
+    [Question.SEVERE_BLEEDING]: { eyebrow:'STEP 4 — BLEEDING', title:'IS THERE LIFE-THREATENING BLEEDING?', detail:'Look for heavy, pumping or rapidly soaking bleeding.' },
+  },
+  scenarios: {
+    scene_unsafe: {
+      eyebrow:'DANGER — DO NOT ENTER', title:'KEEP YOURSELF SAFE', tone:'danger', call:true,
+      steps:['Move other people away from the hazard.', 'Call 999 or 112 and tell the operator what the danger is.', 'Do not touch or approach the casualty until the hazard is controlled or the operator says it is safe.'],
+    },
+    unconscious_breathing: {
+      eyebrow:'UNRESPONSIVE — BREATHING', title:'CALL 999. KEEP THE AIRWAY OPEN.', tone:'ready', call:true,
+      steps:['Call 999 or 112 and use speaker mode.', 'Keep the airway open and monitor breathing continuously.', 'If there is no major trauma and the operator advises it, use the recovery position.', 'If normal breathing stops or becomes only gasping, start CPR immediately.'],
+    },
+    severe_bleeding: {
+      eyebrow:'LIFE-THREATENING BLEEDING', title:'PRESS HARD. CALL 999.', tone:'danger', call:true,
+      steps:['Apply firm, direct manual pressure to the bleeding site now.', 'Use a standard or haemostatic dressing if available; pack the wound if appropriate and keep firm pressure.', 'When bleeding is controlled, secure a pressure dressing.', 'For life-threatening arm or leg bleeding not controlled by pressure, apply a commercial tourniquet 5–7 cm above the wound, not over a joint. Tighten until bleeding stops, note the time, and do not release it.'],
+    },
+    stroke: {
+      eyebrow:'POSSIBLE STROKE', title:'FAST — CALL 999 NOW', tone:'danger', call:true,
+      steps:['FACE: ask them to smile. Look for one side drooping.', 'ARMS: ask them to raise both arms. Look for weakness or numbness.', 'SPEECH: listen for slurred, confused or abnormal speech.', 'TIME: call 999 immediately. Note when symptoms started or when they were last known well. Call even if symptoms have stopped.'],
+    },
+    anaphylaxis: {
+      eyebrow:'SEVERE ALLERGIC REACTION', title:'ADRENALINE. CALL 999.', tone:'danger', call:true,
+      steps:['Use their adrenaline auto-injector immediately if available, following the device instructions.', 'Call 999 and say you suspect anaphylaxis.', 'Lie them down. If breathing is very difficult, they may sit up slowly; do not let them stand or walk. If pregnant, lie on the left side.', 'If symptoms have not improved after 5 minutes and a second auto-injector is available, use it.'],
+    },
+    operator: {
+      eyebrow:'NOT SURE WHAT IS HAPPENING', title:'CALL 999 / 112 FOR GUIDANCE', tone:'ready', call:true,
+      steps:['If you are worried the situation may be life-threatening, call 999 or 112.', 'Put the phone on speaker and describe what you can see.', 'Follow the emergency operator instructions. Operator instructions always override this app.'],
+    },
+  },
+};
 
-function append(incident, next, timelineEvent, now) {
-  return { ...incident, ...next, updatedAt: now, timeline: timelineEvent ? [...incident.timeline, timelineEvent] : incident.timeline };
-}
+const cpr = {
+  adult: {
+    eyebrow:'ADULT CPR', title:'CALL 999. START CPR.', tone:'danger', call:true, rhythm:true,
+    steps:['Call 999 or 112 on speaker. If the person is unresponsive and not breathing normally, start CPR.', 'Place the heel of one hand in the centre of the chest, the other hand on top, arms straight.', 'Compress 5–6 cm deep at 100–120 compressions per minute. Allow full chest recoil and minimise pauses.', 'If trained and willing, give 30 compressions then 2 breaths. If not, continue chest-compression-only CPR.', 'Use an AED as soon as it arrives. Switch it on and follow its prompts.'],
+  },
+  child: {
+    eyebrow:'CHILD CPR — 1 TO 18', title:'CALL 999. GIVE 5 BREATHS.', tone:'danger', call:true, rhythm:true,
+    steps:['Call 999 on speaker and say you are with an unresponsive child who is not breathing normally.', 'If able, give 5 initial rescue breaths.', 'Compress the centre/lower half of the chest with one or two hands, about one third of chest depth (about 5 cm), at 100–120 per minute.', 'For a lay rescuer, continue 30 compressions then 2 breaths. Follow the 999 operator; if specifically trained in paediatric BLS, use your training.', 'Use an AED as soon as available and follow its prompts.'],
+  },
+  infant: {
+    eyebrow:'BABY CPR — UNDER 1', title:'CALL 999. GIVE 5 BREATHS.', tone:'danger', call:true, rhythm:true,
+    steps:['Call 999 on speaker and say you are with an unresponsive baby who is not breathing normally.', 'Give 5 initial rescue breaths if able, covering the baby’s mouth and nose to make a seal.', 'Use the two-thumb encircling technique where possible. Compress the lower half of the breastbone about one third of chest depth (about 4 cm) at 100–120 per minute.', 'Continue 30 compressions then 2 breaths as a lay rescuer and follow the 999 operator.', 'Use an AED as soon as available and follow its prompts.'],
+  },
+};
+
+const choking = {
+  adult: {
+    eyebrow:'CHOKING — ADULT', title:'CAN THEY COUGH?', tone:'danger', call:false,
+    steps:['If they can cough effectively, encourage coughing and watch closely.', 'If the cough is ineffective, give up to 5 firm back blows between the shoulder blades, checking after each one.', 'If still choking, give up to 5 abdominal thrusts. Alternate 5 back blows and 5 abdominal thrusts.', 'If they become unresponsive, call 999/112 and start CPR. Do not perform a blind finger sweep.'],
+  },
+  child: {
+    eyebrow:'CHOKING — CHILD OVER 1', title:'COUGH • BACK BLOWS • THRUSTS', tone:'danger', call:false,
+    steps:['If the child can cough effectively, encourage coughing.', 'If the cough is ineffective, give up to 5 back blows, checking after each.', 'If still choking, give up to 5 abdominal thrusts. Alternate back blows and abdominal thrusts.', 'If the child becomes unresponsive, call 999/112 and start CPR. Do not perform a blind finger sweep.'],
+  },
+  infant: {
+    eyebrow:'CHOKING — BABY UNDER 1', title:'BACK BLOWS • CHEST THRUSTS', tone:'danger', call:false,
+    steps:['Support the baby with the head lower than the chest and give up to 5 back blows between the shoulder blades.', 'If the blockage remains, turn the baby face-up while supporting the head and give up to 5 chest thrusts.', 'Repeat cycles of 5 back blows and 5 chest thrusts. Do not use abdominal thrusts on a baby.', 'If the baby becomes unresponsive, call 999/112 and start baby CPR. Remove only clearly visible objects; never sweep blindly with a finger.'],
+  },
+};
 
 export function createIncident(now = new Date().toISOString()) {
   return {
-    id: `DEMO-${now.replace(/[^0-9]/g, "").slice(0, 14)}`,
-    mode: "DEMO",
-    state: IncidentState.ACTIVATED,
+    state: IncidentState.ASSESSING,
     activatedAt: now,
     updatedAt: now,
-    emergencyNumberChoice: null,
-    location: { status: "REQUESTING", latitude: null, longitude: null, accuracyMetres: null, capturedAt: null, source: "configured_demo_site", isPrecise: false },
-    microphone: { status: "REQUESTING", level: 0, retained: false, transmitted: false },
-    responders: demoResponders.map((responder) => ({ ...responder, updatedAt: now })),
-    triage: { currentQuestion: Question.SCENE_SAFE, answers: {}, guidance: null },
-    timeline: [
-      event("ACTIVATED", "Local demo emergency activated", now, "LOCAL", "CONFIRMED"),
-      event("ALERT_SIMULATION", "Synthetic responder fan-out started", now, "SIMULATED", "PENDING"),
-    ],
+    currentQuestion: Question.SCENE_SAFE,
+    answers: {},
+    scenario: null,
+    ageGroup: null,
+    callNumber: null,
+    callState: 'NOT_STARTED',
+    location: { status:'IDLE', latitude:null, longitude:null, accuracyMetres:null },
   };
+}
+
+function guidance(incident, scenario, ageGroup = null, now) {
+  return { ...incident, state:IncidentState.GUIDANCE, currentQuestion:null, scenario, ageGroup, updatedAt:now };
 }
 
 export function reduceIncident(incident, action, now = new Date().toISOString()) {
-  if (!incident) throw new Error("An incident is required");
+  if (!incident) throw new Error('An incident is required');
   switch (action.type) {
-    case "BEGIN_ASSESSMENT":
-      return append(incident, { state: IncidentState.ASSESSING }, event("ASSESSMENT_STARTED", "Scene assessment started", now), now);
-    case "LOCATION_AVAILABLE":
-      return append(incident, { location: { status: "AVAILABLE", latitude: action.latitude, longitude: action.longitude, accuracyMetres: action.accuracyMetres, capturedAt: now, source: "browser_geolocation", isPrecise: Number(action.accuracyMetres) <= 30 } }, event("LOCATION_AVAILABLE", "Location available on this device only", now), now);
-    case "LOCATION_FAILED":
-      return append(incident, { location: { ...incident.location, status: action.status || "UNAVAILABLE", capturedAt: now, source: "configured_demo_site", isPrecise: false } }, event("LOCATION_FAILED", "Precise location unavailable", now, "LOCAL", "FAILED"), now);
-    case "MICROPHONE_ACTIVE":
-      return append(incident, { microphone: { status: "LOCAL_ACTIVE", level: 0, retained: false, transmitted: false } }, event("MICROPHONE_ACTIVE", "Local microphone active; not transmitted", now), now);
-    case "MICROPHONE_LEVEL":
-      return append(incident, { microphone: { ...incident.microphone, level: Math.max(0, Math.min(100, Math.round(action.level || 0))) } }, null, now);
-    case "MICROPHONE_FAILED":
-      return append(incident, { microphone: { status: action.status || "UNAVAILABLE", level: 0, retained: false, transmitted: false } }, event("MICROPHONE_FAILED", "Local microphone unavailable", now, "LOCAL", "FAILED"), now);
-    case "MICROPHONE_STOPPED":
-      return append(incident, { microphone: { status: "STOPPED", level: 0, retained: false, transmitted: false } }, event("MICROPHONE_STOPPED", "Local microphone stopped", now), now);
-    case "RESPONDER_UPDATE": {
-      const responders = incident.responders.map((responder) => responder.id === action.id ? { ...responder, state: action.state, etaMinutes: action.etaMinutes ?? responder.etaMinutes, updatedAt: now } : responder);
-      const target = responders.find((responder) => responder.id === action.id);
-      if (!target) return incident;
-      return append(incident, { responders }, event("RESPONDER_UPDATE", `${target.syntheticName} — ${target.state}`, now, "SIMULATED", "CONFIRMED"), now);
+    case 'ANSWER': return answerQuestion(incident, action.answer, now);
+    case 'SELECT_SCENARIO': {
+      const scenario = action.scenario;
+      if (![Scenario.CPR,Scenario.SEVERE_BLEEDING,Scenario.CHOKING,Scenario.STROKE,Scenario.ANAPHYLAXIS,Scenario.OPERATOR].includes(scenario)) return incident;
+      if (scenario === Scenario.CPR || scenario === Scenario.CHOKING) return { ...incident, state:IncidentState.AGE_SELECT, scenario, ageGroup:null, updatedAt:now };
+      return guidance(incident, scenario, null, now);
     }
-    case "ANSWER":
-      return answerQuestion(incident, action.answer, action.source || "touch", now);
-    case "CALL_DIALER_OPENED":
-      return append(incident, { emergencyNumberChoice: action.number }, event("DIALER_OPENED", `Dialler opened for ${action.number}; call state unknown`, now, "PLATFORM_ACTION", "UNKNOWN"), now);
-    case "HANDOVER_READY":
-      return append(incident, { state: IncidentState.HANDOVER_READY }, event("HANDOVER_READY", "Demo operator brief ready", now), now);
-    case "CANCEL":
-      return append(incident, { state: IncidentState.CANCELLED_FALSE_ALARM, microphone: { status: "STOPPED", level: 0, retained: false, transmitted: false } }, event("CANCELLED_FALSE_ALARM", "Local demo cancelled; no external cancellation sent", now, "LOCAL", "CONFIRMED"), now);
-    default:
-      return incident;
+    case 'SELECT_AGE': {
+      if (!Object.values(AgeGroup).includes(action.ageGroup)) return incident;
+      if (![Scenario.CPR,Scenario.CHOKING].includes(incident.scenario)) return incident;
+      return guidance(incident, incident.scenario, action.ageGroup, now);
+    }
+    case 'BACK_TO_SCENARIOS': return { ...incident, state:IncidentState.SCENARIO_PICKER, currentQuestion:null, scenario:null, ageGroup:null, updatedAt:now };
+    case 'CALL_DIALER_OPENED': return { ...incident, callNumber:action.number, callState:'DIALER_OPENED_CONNECTION_UNKNOWN', updatedAt:now };
+    case 'LOCATION_REQUESTING': return { ...incident, location:{...incident.location,status:'REQUESTING'}, updatedAt:now };
+    case 'LOCATION_AVAILABLE': return { ...incident, location:{status:'AVAILABLE',latitude:action.latitude,longitude:action.longitude,accuracyMetres:action.accuracyMetres}, updatedAt:now };
+    case 'LOCATION_FAILED': return { ...incident, location:{status:action.status || 'UNAVAILABLE',latitude:null,longitude:null,accuracyMetres:null}, updatedAt:now };
+    case 'CANCEL': return { ...incident, state:IncidentState.CANCELLED, updatedAt:now };
+    default: return incident;
   }
 }
 
-function answerQuestion(incident, answer, source, now) {
+function answerQuestion(incident, answer, now) {
   if (!Object.values(Answer).includes(answer)) throw new Error(`Unsupported answer: ${answer}`);
-  const question = incident.triage.currentQuestion;
+  const question = incident.currentQuestion;
   if (!question) return incident;
-  const answers = { ...incident.triage.answers, [question]: { answer, source, answeredAt: now } };
-  let currentQuestion = null;
-  let guidance = null;
-  let state = IncidentState.ASSESSING;
+  const answers = { ...incident.answers, [question]:answer };
   if (question === Question.SCENE_SAFE) {
-    if (answer === Answer.YES) currentQuestion = Question.RESPONSIVE; else guidance = Guidance.SCENE_UNSAFE;
-  } else if (question === Question.RESPONSIVE) {
-    if (answer === Answer.NO || answer === Answer.UNKNOWN) currentQuestion = Question.BREATHING; else currentQuestion = Question.SEVERE_BLEEDING;
-  } else if (question === Question.BREATHING) {
-    if (answer === Answer.YES) currentQuestion = Question.SEVERE_BLEEDING; else guidance = Guidance.CPR;
-  } else if (question === Question.SEVERE_BLEEDING) {
-    guidance = answer === Answer.YES ? Guidance.SEVERE_BLEEDING : Guidance.OPERATOR_BRIEF;
+    if (answer === Answer.YES) return { ...incident, answers, currentQuestion:Question.RESPONSIVE, updatedAt:now };
+    return guidance({ ...incident, answers }, Scenario.SCENE_UNSAFE, null, now);
   }
-  if (guidance) state = IncidentState.GUIDANCE;
-  return append(incident, { state, triage: { currentQuestion, answers, guidance } }, event("TRIAGE_ANSWER", `${question}: ${answer}`, now, "LOCAL", "CONFIRMED"), now);
+  if (question === Question.RESPONSIVE) {
+    if (answer === Answer.YES) return { ...incident, answers, currentQuestion:Question.SEVERE_BLEEDING, updatedAt:now };
+    return { ...incident, answers, currentQuestion:Question.BREATHING, updatedAt:now };
+  }
+  if (question === Question.BREATHING) {
+    if (answer === Answer.YES) return guidance({ ...incident, answers }, Scenario.UNCONSCIOUS_BREATHING, null, now);
+    return { ...incident, answers, state:IncidentState.AGE_SELECT, currentQuestion:null, scenario:Scenario.CPR, ageGroup:null, updatedAt:now };
+  }
+  if (question === Question.SEVERE_BLEEDING) {
+    if (answer === Answer.YES) return guidance({ ...incident, answers }, Scenario.SEVERE_BLEEDING, null, now);
+    return { ...incident, answers, state:IncidentState.SCENARIO_PICKER, currentQuestion:null, scenario:null, ageGroup:null, updatedAt:now };
+  }
+  return incident;
 }
 
-export function getResponderSummary(responders) {
-  const acknowledged = responders.filter((responder) => ["ACKNOWLEDGED", "EN_ROUTE", "ON_SCENE"].includes(responder.state)).length;
-  const enRoute = responders.filter((responder) => responder.state === "EN_ROUTE").length;
-  const onScene = responders.filter((responder) => responder.state === "ON_SCENE").length;
-  return { total: responders.length, acknowledged, enRoute, onScene };
-}
+export function getQuestionCopy(question) { return copy.questions[question] || null; }
 
-export function getQuestionCopy(question) {
-  const copy = {
-    [Question.SCENE_SAFE]: { eyebrow: "STEP 1 — SCENE SAFETY", title: "IS THE AREA SAFE TO ENTER?", detail: "Look for traffic, electricity, fire, smoke, gas, chemicals or moving machinery." },
-    [Question.RESPONSIVE]: { eyebrow: "STEP 2 — RESPONSE", title: "IS THE PERSON RESPONDING?", detail: "Speak loudly. Ask them to open their eyes. Do not shake an injured person." },
-    [Question.BREATHING]: { eyebrow: "STEP 3 — BREATHING", title: "ARE THEY BREATHING NORMALLY?", detail: "Look, listen and feel. Gasping is not normal breathing." },
-    [Question.SEVERE_BLEEDING]: { eyebrow: "STEP 4 — BLEEDING", title: "IS THERE SEVERE BLEEDING?", detail: "Look for blood that is flowing, pumping or soaking through clothing." },
-  };
-  return copy[question] || null;
-}
-
-export function getGuidanceCopy(guidance) {
-  const copy = {
-    [Guidance.SCENE_UNSAFE]: { tone: "danger", eyebrow: "DANGER — DO NOT ENTER", title: "KEEP YOURSELF SAFE", action: "Move other people away. Call 999 or 112. Tell the operator what the danger is.", secondary: "Do not touch the casualty until the hazard is controlled or the operator tells you it is safe." },
-    [Guidance.CPR]: { tone: "danger", eyebrow: "NOT BREATHING NORMALLY", title: "CALL NOW. START CPR.", action: "Put the phone on speaker. Follow the emergency operator. Start chest compressions as directed.", secondary: "Send someone for the nearest verified AED. Continue until help takes over or the operator tells you to stop." },
-    [Guidance.SEVERE_BLEEDING]: { tone: "danger", eyebrow: "SEVERE BLEEDING", title: "APPLY FIRM DIRECT PRESSURE", action: "Use a clean pad or cloth if available. Keep firm pressure on the wound and call 999 or 112.", secondary: "Follow the emergency operator. This demo content requires final clinical approval before production use." },
-    [Guidance.OPERATOR_BRIEF]: { tone: "ready", eyebrow: "INITIAL CHECK COMPLETE", title: "KEEP WATCHING THE CASUALTY", action: "Call emergency services if needed. Keep them still, warm and reassured. Report any change immediately.", secondary: "The module has prepared a demo handover from your answers. Emergency operator instructions always override this screen." },
-  };
-  return copy[guidance] || null;
+export function getScenarioCopy(scenario, ageGroup = null) {
+  if (scenario === Scenario.CPR) return cpr[ageGroup] || null;
+  if (scenario === Scenario.CHOKING) return choking[ageGroup] || null;
+  return copy.scenarios[scenario] || null;
 }

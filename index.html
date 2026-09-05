@@ -4,24 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#d20d18" />
-    <meta name="description" content="Standalone NOSMO Emergency Core interaction demonstrator." />
+    <meta name="description" content="Standalone NOSMO Emergency Core offline first-aid guidance." />
     <link rel="manifest" href="app.webmanifest" />
     <link rel="stylesheet" href="styles.css" />
-    <title>NOSMO Emergency Core — Demo</title>
+    <link rel="stylesheet" href="engine.css" />
+    <title>NOSMO Emergency Core</title>
   </head>
   <body>
     <main id="startScreen" class="start-screen">
       <header class="start-header">
         <div class="wordmark" aria-label="NOSMO">NOSMO</div>
         <div class="module-name">EMERGENCY CORE</div>
-        <div class="demo-chip">STANDALONE DEMO</div>
+        <div class="demo-chip">STANDALONE</div>
       </header>
 
       <section class="activation-zone" aria-labelledby="startTitle">
         <div class="activation-copy">
           <p class="eyebrow">ONE PRESS • IMMEDIATE FULL-SCREEN MODE</p>
-          <h1 id="startTitle">PRESS ONLY TO START THE DEMO</h1>
-          <p>This does not alert staff or call emergency services.</p>
+          <h1 id="startTitle">PRESS TO START EMERGENCY HELP</h1>
+          <p>Local first-aid guidance. Emergency calls are made only when you choose 999 or 112.</p>
         </div>
         <button id="activateButton" class="activate-button" type="button" aria-describedby="activationTruth">
           <span class="sos-label">SOS</span>
@@ -29,14 +30,14 @@
           <span class="press-label">PRESS ONCE</span>
         </button>
         <p id="activationTruth" class="activation-truth">
-          Local device demonstration. Location and microphone permissions are optional.
+          The app can open your dialler but cannot confirm that a call connected or that emergency services were notified.
         </p>
       </section>
     </main>
 
     <section id="emergencyScreen" class="emergency-shell" aria-live="polite" hidden>
       <div class="demo-banner" role="status">
-        DEMO • NO REAL ALERTS SENT • NO AUDIO TRANSMISSION
+        LOCAL GUIDANCE • 999 / 112 OPENS DIALLER • FOLLOW THE OPERATOR
       </div>
 
       <header class="emergency-header">
@@ -45,64 +46,49 @@
           <h1>ACTIVE</h1>
         </div>
         <time id="elapsedTime" class="elapsed" datetime="PT0S">00:00</time>
-        <button id="voiceToggle" class="voice-toggle" type="button" aria-pressed="true">
-          VOICE ON
-        </button>
+        <button id="voiceToggle" class="voice-toggle" type="button" aria-pressed="true">VOICE ON</button>
       </header>
 
-      <div class="status-grid" aria-label="Emergency status">
-        <button id="teamStatus" class="status-card" type="button" aria-haspopup="dialog">
-          <span class="status-label">TEAM</span>
-          <strong id="teamStatusValue">ALERTING DEMO</strong>
-          <span id="teamStatusDetail">0 OF 3 ACK</span>
+      <div class="status-grid" aria-label="Emergency tools">
+        <button id="callStatus" class="status-card" type="button" aria-haspopup="dialog">
+          <span class="status-label">EMERGENCY CALL</span>
+          <strong>999 / 112</strong>
+          <span>OPEN DIALLER</span>
         </button>
-        <div id="locationStatus" class="status-card" role="status">
+        <button id="locationStatus" class="status-card" type="button">
           <span class="status-label">LOCATION</span>
-          <strong id="locationStatusValue">REQUESTING</strong>
-          <span id="locationStatusDetail">DEMO SITE • LEEDS</span>
-        </div>
-        <div id="microphoneStatus" class="status-card" role="status">
-          <span class="status-label">MICROPHONE</span>
-          <strong id="microphoneStatusValue">REQUESTING</strong>
-          <span id="microphoneStatusDetail">LOCAL ONLY</span>
-          <span class="mic-meter" aria-hidden="true"><span id="micMeterFill"></span></span>
+          <strong id="locationStatusValue">TAP TO GET</strong>
+          <span id="locationStatusDetail">DEVICE ONLY</span>
+        </button>
+        <div class="status-card" role="status">
+          <span class="status-label">OFFLINE CORE</span>
+          <strong>READY</strong>
+          <span>NO BACKEND REQUIRED</span>
         </div>
       </div>
 
       <section id="decisionPanel" class="decision-panel" aria-live="assertive"></section>
 
-      <button id="cancelButton" class="cancel-button" type="button">
-        FALSE ALARM / CANCEL DEMO
-      </button>
+      <button id="cancelButton" class="cancel-button" type="button">FALSE ALARM / EXIT EMERGENCY MODE</button>
 
-      <dialog id="responderDialog" class="responder-dialog" aria-labelledby="responderTitle">
-        <div class="dialog-banner">RESPONDER VIEW • SIMULATION</div>
-        <div class="responder-dialog-body">
-          <p class="eyebrow danger-text">INCOMING EMERGENCY</p>
-          <h2 id="responderTitle">DEMO SITE • LEEDS</h2>
-          <p class="responder-location">LEVEL 3 • ZONE C • LOCATION UPDATING</p>
-          <div id="responderList" class="responder-list"></div>
-          <div class="responder-actions">
-            <button id="acknowledgeDemo" class="huge-action go-action" type="button">
-              ACKNOWLEDGE<br />&amp; GO
-            </button>
-            <button id="unavailableDemo" class="huge-action unavailable-action" type="button">
-              UNAVAILABLE
-            </button>
+      <dialog id="callDialog" class="call-dialog" aria-labelledby="callDialogTitle">
+        <div class="dialog-banner">EMERGENCY CALL • DEVICE DIALLER</div>
+        <div class="call-dialog-body">
+          <p class="eyebrow danger-text">CALL EMERGENCY SERVICES</p>
+          <h2 id="callDialogTitle">CHOOSE NUMBER</h2>
+          <p>The app opens the device dialler. It cannot confirm connection or dispatch.</p>
+          <div class="call-dialog-actions">
+            <button class="huge-action call-999" type="button" data-call="999">CALL 999</button>
+            <button class="huge-action call-112" type="button" data-call="112">CALL 112</button>
           </div>
-          <button id="joinAudioDemo" class="audio-demo-action" type="button">
-            JOIN LIVE AUDIO<br /><span>BACKEND NOT CONNECTED</span>
-          </button>
-          <button id="closeResponderDialog" class="dialog-close" type="button">
-            BACK TO HELPER
-          </button>
+          <button id="closeCallDialog" class="dialog-close" type="button">BACK TO GUIDANCE</button>
         </div>
       </dialog>
 
       <div id="toast" class="toast" role="status" aria-live="assertive" hidden></div>
     </section>
 
-    <noscript>This demonstrator requires JavaScript.</noscript>
+    <noscript>This application requires JavaScript. In a life-threatening emergency call 999 or 112.</noscript>
     <script type="module" src="src/app.js"></script>
   </body>
 </html>
