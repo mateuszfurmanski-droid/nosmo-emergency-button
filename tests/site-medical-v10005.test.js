@@ -79,14 +79,14 @@ test('hypoglycaemia guidance uses oral glucose only when swallowing is safe',()=
   assert.match(text,/Call 999/i);
 });
 
-test('V1.0005 module is loaded and cached offline',async()=>{
+test('site medical module remains loaded and cached in later releases',async()=>{
   const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
   const sw=await readFile(new URL('../service-worker.js',import.meta.url),'utf8');
   assert.match(html,/site-medical\.css/);
   assert.match(html,/src\/site-medical-ui\.js/);
   assert.match(sw,/site-medical\.css/);
   assert.match(sw,/src\/site-medical-ui\.js/);
-  assert.match(sw,/v1-0005/);
+  assert.match(sw,/nosmo-emergency-core-v1-/);
 });
 
 test('site medical module has no backend transport or fake responder state',async()=>{
