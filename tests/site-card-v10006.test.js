@@ -55,8 +55,8 @@ test('999 and 112 handover calls remain explicit device dialler actions',async()
   assert.doesNotMatch(source,/call connected|ambulance dispatched|services notified|responder alerted/i);
 });
 
-test('V1.0006 offline worker precaches Site Card UI and logic',async()=>{
+test('Site Card UI and logic remain precached in later releases',async()=>{
   const sw=await readFile(new URL('../service-worker.js',import.meta.url),'utf8');
-  assert.match(sw,/nosmo-emergency-core-v1-0006/);
+  assert.match(sw,/nosmo-emergency-core-v1-/);
   for(const file of ['site-card.css','src/site-emergency-card.js'])assert.match(sw,new RegExp(file.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
 });
