@@ -1,9 +1,17 @@
 {
-  "name": "NOSMO Emergency Core Demo",
-  "short_name": "Emergency Core",
+  "id": "./",
+  "name": "NOSMO Emergency Core",
+  "short_name": "NOSMO SOS",
+  "description": "Offline construction-site emergency first-aid guidance and 999 handover.",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0b0e12",
   "theme_color": "#d20d18",
-  "lang": "en-GB"
+  "lang": "en-GB",
+  "orientation": "any",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
 }
