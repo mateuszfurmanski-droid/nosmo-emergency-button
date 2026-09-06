@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nosmo-emergency-core-v1-0008-20260906';
+const CACHE_NAME = 'nosmo-emergency-core-v1-0008c-20260906';
 const STATIC_ASSETS = [
   './','./index.html','./VERSION','./styles.css','./engine.css','./site-medical.css','./site-card.css','./multilingual.css','./field.css','./app.webmanifest',
   './src/app.js','./src/emergency-state.js','./src/site-medical-ui.js','./src/site-emergency-card.js','./src/multilingual-runtime.js','./src/site-language.js','./src/field-runtime.js','./src/i18n.js',
