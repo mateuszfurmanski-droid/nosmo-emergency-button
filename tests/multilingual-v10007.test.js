@@ -68,8 +68,8 @@ test('production HTML loads stable multilingual runtime without replacing Emerge
   assert.doesNotMatch(html,/src\/multilingual-ui\.js/);
 });
 
-test('V1.0007 service worker precaches stable multilingual runtime and all 17 packs',async()=>{
+test('stable multilingual runtime and all 17 packs remain precached in later releases',async()=>{
   const sw=await readFile(new URL('../service-worker.js',import.meta.url),'utf8');
-  assert.match(sw,/v1-0007-r2/);
+  assert.match(sw,/nosmo-emergency-core-v1-/);
   for(const token of ['multilingual.css','src/multilingual-runtime.js','src/site-language.js','src/i18n.js',...codes.map((c)=>`src/lang/${c}.js`)])assert.match(sw,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
 });
