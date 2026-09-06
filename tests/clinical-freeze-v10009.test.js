@@ -69,11 +69,11 @@ test('production-facing files make no certified or pilot-ready claim',async()=>{
   assert.doesNotMatch(visible,/clinically approved|medical device certified|\bcertified\b|\bpilot[- ]ready\b|\bproduction[- ]ready\b/i);
 });
 
-test('V1.0009 version and offline cache include clinical freeze metadata',async()=>{
-  const version=await readFile(new URL('../VERSION',import.meta.url),'utf8');
+test('clinical freeze metadata remains versioned and offline-cached in later releases',async()=>{
+  const version=(await readFile(new URL('../VERSION',import.meta.url),'utf8')).trim();
   const sw=await readFile(new URL('../service-worker.js',import.meta.url),'utf8');
-  assert.equal(version.trim(),'V1.0009');
-  assert.match(sw,/v1-0009/);
+  assert.match(version,/^V1\.\d{4}$/);
+  assert.match(sw,/nosmo-emergency-core-v1-/);
   assert.match(sw,/src\/source-provenance\.js/);
   assert.match(sw,/src\/clinical-freeze\.js/);
 });
