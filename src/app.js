@@ -131,6 +131,16 @@ function cancelEmergency(){ stopRhythm(false); if('speechSynthesis'in window)win
 function resetEmergency(){ cleanup(); incident=null;lastSpokenKey=null;refs.cancelButton.hidden=false;refs.emergencyScreen.hidden=true;refs.startScreen.hidden=false;refs.elapsedTime.textContent='00:00';document.body.classList.remove('emergency-active');refs.activateButton.focus(); }
 function cleanup(){ if(elapsedTimer)clearInterval(elapsedTimer);elapsedTimer=null;stopRhythm(false);if(wakeLock)wakeLock.release().catch(()=>{});wakeLock=null;if('speechSynthesis'in window)window.speechSynthesis.cancel(); }
 function showToast(message){refs.toast.textContent=message;refs.toast.hidden=false;if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(()=>refs.toast.hidden=true,3200);}
+function getEmergencySnapshot(){
+  if(!incident)return null;
+  try{return structuredClone(incident);}catch{return JSON.parse(JSON.stringify(incident));}
+}
+
+window.NOSMOEmergency=Object.freeze({
+  getSnapshot:getEmergencySnapshot,
+  requestLocation,
+  openDialler,
+});
 
 refs.activateButton.addEventListener('click',activateEmergency);
 refs.voiceToggle.addEventListener('click',toggleVoice);
