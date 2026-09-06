@@ -43,8 +43,8 @@ test('low landscape viewport has dedicated hardening and dialogs stay within dyn
   assert.match(css,/\.call-dialog/);
 });
 
-test('Fold field.css remains cached in later V1.0008 sub-releases',async()=>{
+test('Fold field.css remains cached in later releases',async()=>{
   const sw=await readFile(new URL('../service-worker.js',import.meta.url),'utf8');
-  assert.match(sw,/v1-0008[a-z]?/i);
+  assert.match(sw,/nosmo-emergency-core-v1-/);
   assert.match(sw,/field\.css/);
 });

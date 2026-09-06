@@ -37,6 +37,9 @@ export const sources = Object.freeze({
   nhs_chemical_burn: {
     authority:'NHS', title:'Acid and chemical burns', url:'https://www.nhs.uk/conditions/acid-and-chemical-burns/', reviewed:SOURCE_REVIEW_DATE,
   },
+  nhs_eye_injuries: {
+    authority:'NHS', title:'Eye injuries', url:'https://www.nhs.uk/conditions/eye-injuries/', reviewed:'2026-09-06',
+  },
   nhs_poisoning: {
     authority:'NHS', title:'Poisoning', url:'https://www.nhs.uk/conditions/poisoning/', reviewed:SOURCE_REVIEW_DATE,
   },
@@ -111,6 +114,22 @@ export const scenarioSources = Object.freeze({
   cpr_adult:['rcuk_adult_bls_2025'],
   cpr_child:['rcuk_paediatric_cpr_2025'],
   cpr_infant:['rcuk_paediatric_cpr_2025'],
+
+  // Live construction runtime aliases.
+  cpr:['rcuk_adult_bls_2025'],
+  choking:['rcuk_first_aid_2025'],
+  fall_head_spine:['rcuk_first_aid_2025','nhs_when_999'],
+  electrical_injury:['nhs_burns','nhs_when_999'],
+  thermal_burn:['nhs_burns'],
+  chemical_burn:['nhs_chemical_burn'],
+  operator:['nhs_when_999'],
+
+  // V1.0005 Site Medical Pack runtime IDs.
+  open_chest_wound:['rcuk_first_aid_2025','nhs_when_999'],
+  fracture_dislocation:['brc_fracture','nhs_when_999'],
+  eye_injury:['nhs_eye_injuries'],
+  fume_inhalation:['nhs_breathlessness','nhs_when_999'],
+  hypoglycaemia:['nhs_hypoglycaemia'],
 });
 
 export function getScenarioSources(scenarioId) {

@@ -46,9 +46,9 @@ test('field update handling never reloads during active emergency',async()=>{
   assert.equal(FIELD_RELOAD_GUARD,'nosmo-field-reload-v1');
 });
 
-test('offline worker precaches full V1.0008 field runtime and install assets',async()=>{
+test('field runtime and install assets remain precached in later releases',async()=>{
   const sw=await read('service-worker.js');
-  assert.match(sw,/v1-0008/);
+  assert.match(sw,/nosmo-emergency-core-v1-/);
   for(const token of ['./VERSION','field.css','src/field-runtime.js','app.webmanifest','icons/icon-192.png','icons/icon-512.png']) assert.match(sw,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   assert.match(sw,/caches\.match\('\.\/index\.html'\)/);
 });
