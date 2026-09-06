@@ -1,7 +1,7 @@
-const CACHE_NAME = 'nosmo-emergency-core-v1-0007-r2-20260906';
+const CACHE_NAME = 'nosmo-emergency-core-v1-0008-20260906';
 const STATIC_ASSETS = [
-  './','./index.html','./styles.css','./engine.css','./site-medical.css','./site-card.css','./multilingual.css','./app.webmanifest',
-  './src/app.js','./src/emergency-state.js','./src/site-medical-ui.js','./src/site-emergency-card.js','./src/multilingual-runtime.js','./src/site-language.js','./src/i18n.js',
+  './','./index.html','./VERSION','./styles.css','./engine.css','./site-medical.css','./site-card.css','./multilingual.css','./field.css','./app.webmanifest',
+  './src/app.js','./src/emergency-state.js','./src/site-medical-ui.js','./src/site-emergency-card.js','./src/multilingual-runtime.js','./src/site-language.js','./src/field-runtime.js','./src/i18n.js',
   './src/lang/en.js','./src/lang/pl.js','./src/lang/ro.js','./src/lang/ur.js','./src/lang/pa.js','./src/lang/bn.js','./src/lang/gu.js','./src/lang/ar.js','./src/lang/pt.js','./src/lang/es.js','./src/lang/fr.js','./src/lang/lt.js','./src/lang/bg.js','./src/lang/uk.js','./src/lang/zh.js','./src/lang/tr.js','./src/lang/it.js',
   './icons/icon-192.png','./icons/icon-512.png'
 ];
