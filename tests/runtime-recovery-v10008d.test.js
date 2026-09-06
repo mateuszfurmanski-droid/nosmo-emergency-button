@@ -44,12 +44,12 @@ test('existing location status card supports tap-to-retry after failure',async()
   assert.match(app,/refs\.locationStatus\.addEventListener\('click',requestLocation\)/);
 });
 
-test('V1.0008D runtime is loaded and cached offline',async()=>{
+test('runtime recovery remains loaded and cached offline in later releases',async()=>{
   const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
   const sw=await readFile(new URL('../service-worker.js',import.meta.url),'utf8');
   assert.match(html,/src\/runtime-recovery\.js/);
   assert.match(sw,/src\/runtime-recovery\.js/);
-  assert.match(sw,/v1-0008d/);
+  assert.match(sw,/nosmo-emergency-core-v1-/);
 });
 
 test('runtime recovery adds no backend, responder or dispatch behaviour',async()=>{
