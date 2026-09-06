@@ -1,13 +1,13 @@
 {
   "name":"@nosmo/emergency-button",
-  "version":"1.0.7",
+  "version":"1.0.8",
   "private":true,
   "type":"module",
   "description":"Standalone offline-capable NOSMO Emergency Button PWA.",
   "scripts":{
     "start":"node server.js",
     "test":"node --test",
-    "check":"node --check src/emergency-state.js && node --check src/emergency-data.js && node --check src/i18n.js && node --check src/app.js && node --check src/site-medical-ui.js && node --check src/site-emergency-card.js && node --check src/site-language.js && node --check src/multilingual-runtime.js && node --check service-worker.js && node --check server.js && node --test"
+    "check":"node --check src/emergency-state.js && node --check src/emergency-data.js && node --check src/i18n.js && node --check src/app.js && node --check src/site-medical-ui.js && node --check src/site-emergency-card.js && node --check src/site-language.js && node --check src/multilingual-runtime.js && node --check src/field-runtime.js && node --check service-worker.js && node --check server.js && node --test"
   },
   "engines":{"node":">=20"}
 }
