@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="engine.css" />
     <link rel="stylesheet" href="site-medical.css" />
+    <link rel="stylesheet" href="site-card.css" />
     <title>NOSMO Emergency Core</title>
   </head>
   <body>
@@ -16,7 +17,7 @@
       <header class="start-header">
         <div class="wordmark" aria-label="NOSMO">NOSMO</div>
         <div class="module-name">EMERGENCY CORE</div>
-        <div class="demo-chip">STANDALONE</div>
+        <button id="siteCardHome" class="demo-chip site-card-chip" type="button">SITE CARD</button>
       </header>
 
       <section class="activation-zone" aria-labelledby="startTitle">
@@ -61,11 +62,11 @@
           <strong id="locationStatusValue">TAP TO GET</strong>
           <span id="locationStatusDetail">DEVICE ONLY</span>
         </button>
-        <div class="status-card" role="status">
-          <span class="status-label">OFFLINE CORE</span>
-          <strong>READY</strong>
-          <span>NO BACKEND REQUIRED</span>
-        </div>
+        <button id="siteCardStatus" class="status-card" type="button" aria-haspopup="dialog">
+          <span class="status-label">SITE CARD</span>
+          <strong id="siteCardStatusValue">SET UP</strong>
+          <span id="siteCardStatusDetail">999 HANDOVER</span>
+        </button>
       </div>
 
       <section id="decisionPanel" class="decision-panel" aria-live="assertive"></section>
@@ -92,5 +93,6 @@
     <noscript>This application requires JavaScript. In a life-threatening emergency call 999 or 112.</noscript>
     <script type="module" src="src/app.js"></script>
     <script type="module" src="src/site-medical-ui.js"></script>
+    <script type="module" src="src/site-emergency-card.js"></script>
   </body>
 </html>
