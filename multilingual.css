@@ -1,0 +1,17 @@
+/* V1.0007 multilingual layer. Original Emergency Core geometry remains in styles.css. */
+.language-chip{min-width:72px;height:44px;padding:0 12px;border:2px solid currentColor;border-radius:999px;background:transparent;color:inherit;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:900;cursor:pointer}
+.language-chip span{font-size:1.15rem}.language-chip strong{font-size:.85rem;letter-spacing:.08em}
+.start-header .language-chip{justify-self:end}
+.emergency-language-chip{margin-left:auto}
+.language-dialog{width:min(880px,100vw);max-width:100vw;height:min(900px,100dvh);max-height:100dvh;margin:auto;padding:0;border:0;background:var(--architect-white);color:var(--midnight-black)}
+.language-dialog::backdrop{background:rgba(0,0,0,.9)}
+.language-dialog-body{height:calc(100% - 42px);padding:clamp(14px,3vw,28px);display:grid;grid-template-rows:auto 1fr auto auto;gap:14px}
+.language-dialog-head h2{margin:0;font-size:clamp(2.4rem,8vw,5.5rem);line-height:.92}.language-dialog-head p{margin:8px 0 0;font-weight:750;line-height:1.25}
+.language-grid{overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;align-content:start}
+.language-choice{min-height:86px;padding:10px;border:0;background:#202630;color:white;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:12px;align-items:center;text-align:left}
+.language-choice span{grid-row:1/3;font-size:2rem}.language-choice strong{font-size:1.05rem}.language-choice small{opacity:.75}.language-choice.active{outline:5px solid var(--silent-gold);outline-offset:-5px}
+.language-operator-note,.translation-fallback-note{padding:10px 12px;border:2px solid var(--silent-gold);background:#fff6cf;color:#1a1d21;font-weight:800;line-height:1.25}
+.language-close{min-height:64px;border:0;background:var(--midnight-black);color:white;font-size:1.1rem;font-weight:1000}
+.rtl-language .language-dialog-body,.rtl-language .site-card-body,.rtl-language .guidance-copy,.rtl-language .instruction-copy,.rtl-language .scenario-copy{direction:rtl;text-align:right}
+.rtl-language .language-choice{text-align:right}
+@media(max-width:560px){.language-chip{min-width:64px;height:40px;padding:0 9px}.language-grid{grid-template-columns:1fr 1fr}.language-choice{min-height:76px}.language-choice span{font-size:1.65rem}}
